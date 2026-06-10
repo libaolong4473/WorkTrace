@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.worktrace.ui.controller.MainController"
+            prefWidth="960" prefHeight="640"
+            stylesheets="@../css/style.css">
+
+    <!-- ==================== TOP: 监听状态栏 ==================== -->
+    <top>
+        <HBox styleClass="top-bar" spacing="12" alignment="CENTER_LEFT"
+              padding="8 16">
+            <Label fx:id="lblWatchStatus" text="○ 已停止" styleClass="status-label"/>
+            <Separator orientation="VERTICAL" prefHeight="16"/>
+            <Label fx:id="lblWatchedDirs" text="监听目录：未配置"/>
+        </HBox>
+    </top>
+
+    <!-- ==================== LEFT: 侧边栏 ==================== -->
+    <left>
+        <VBox fx:id="sidebarBox" prefWidth="220" styleClass="sidebar" spacing="8"
+              padding="12">
+            <!-- 今日概览 -->
+            <Label text="📊 今日概览" styleClass="section-title"/>
+            <Label fx:id="lblTodaySummary" text="加载中..."/>
+
+            <Separator/>
+
+            <!-- 导航树 -->
+            <Label text="📁 导航" styleClass="section-title"/>
+            <TreeView fx:id="navTree" VBox.vgrow="ALWAYS"/>
+
+            <Separator/>
+
+            <!-- 监听控制按钮 -->
+            <Button text="▶ 开始监听" styleClass="btn-start" maxWidth="Infinity"/>
+            <Button text="■ 停止监听" styleClass="btn-stop"  maxWidth="Infinity"/>
+        </VBox>
+    </left>
+
+    <!-- ==================== CENTER: 活动列表 ==================== -->
+    <center>
+        <VBox spacing="8" padding="12">
+            <Label text="📋 活动列表" styleClass="section-title"/>
+            <ListView fx:id="activityList" VBox.vgrow="ALWAYS"/>
+        </VBox>
+    </center>
+
+    <!-- ==================== BOTTOM: 状态栏 ==================== -->
+    <bottom>
+        <HBox styleClass="bottom-bar" alignment="CENTER_RIGHT" padding="4 16">
+            <Label fx:id="lblEventCount" text="事件数：0"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>

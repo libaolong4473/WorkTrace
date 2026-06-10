@@ -1,0 +1,52 @@
+/* WorkTrace 主题样式 */
+
+/* ===== 全局 ===== */
+.root {
+    -fx-font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    -fx-font-size: 13px;
+    -fx-background-color: #FAFAFA;
+}
+
+/* ===== 顶部状态栏 ===== */
+.top-bar {
+    -fx-background-color: #263238;
+    -fx-text-fill: #ECEFF1;
+}
+
+.status-label {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+/* ===== 左侧边栏 ===== */
+.sidebar {
+    -fx-background-color: #ECEFF1;
+    -fx-border-color: #CFD8DC;
+    -fx-border-width: 0 1 0 0;
+}
+
+.section-title {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #37474F;
+}
+
+/* ===== 按钮 ===== */
+.btn-start {
+    -fx-background-color: #4CAF50;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}
+
+.btn-stop {
+    -fx-background-color: #F44336;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}
+
+/* ===== 底部状态栏 ===== */
+.bottom-bar {
+    -fx-background-color: #ECEFF1;
+    -fx-border-color: #CFD8DC;
+    -fx-border-width: 1 0 0 0;
+}
