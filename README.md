@@ -1,5 +1,7 @@
 # WorkTrace
 
+[简体中文](./README_zh.md) | English
+
 A desktop activity timeline tool that transforms file system events into clear, human-readable work history, helping users understand what they created, modified, and worked on each day.
 
 ## What It Does
@@ -14,6 +16,16 @@ WorkTrace silently watches your files in the background. When you edit code, upd
 
 Instead of seeing 47 individual file saves, you see 3 work sessions.
 
+## Why WorkTrace?
+
+We spend hours writing code, drafting docs, and tweaking configs every day — yet by Friday, most of it is a blur. Standups become vague recollections. Weekly reports turn into guesswork. Monthly reviews are reconstructed from half-remembered git commits.
+
+WorkTrace exists to fight that forgetting.
+
+It is a permanent, passive digital archive of your daily work. No manual input. No discipline required. Just start monitoring, do your work, and WorkTrace silently builds a clear timeline of what you actually did — not what you think you did. Months later, you can pull up any date and see exactly which files you touched, how long you worked on each project, and what kind of work it was.
+
+Think of it as **git log for your entire machine**, not just repositories. Your memory fades. WorkTrace doesn't.
+
 ## Features
 
 - **Automatic file monitoring** — recursive directory watching via NIO WatchService
@@ -26,13 +38,13 @@ Instead of seeing 47 individual file saves, you see 3 work sessions.
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Language | Java 21 (JPMS modules) |
-| UI | JavaFX 21 + FXML |
-| Database | SQLite (WAL mode) |
-| Build | Maven |
-| Architecture | MVC + Event-Driven |
+| Layer         | Technology               |
+| ------------- | ------------------------ |
+| Language      | Java 21 (JPMS modules)   |
+| UI            | JavaFX 21 + FXML         |
+| Database      | SQLite (WAL mode)        |
+| Build         | Maven                    |
+| Architecture  | MVC + Event-Driven       |
 
 ## Getting Started
 
@@ -154,11 +166,11 @@ Windows File System
 
 Three tables, stored at `~/.worktrace/worktrace.db`:
 
-| Table | Purpose |
-|-------|---------|
-| `file_event` | Raw file system events (CREATE / MODIFY / DELETE) |
+| Table            | Purpose                                          |
+| ---------------- | ------------------------------------------------ |
+| `file_event`     | Raw file system events (CREATE / MODIFY / DELETE)|
 | `activity_block` | Aggregated work sessions with time range and category |
-| `project_info` | Registered project root paths |
+| `project_info`   | Registered project root paths                    |
 
 Deduplication: `UNIQUE(start_time, end_time, category)` prevents duplicate activity blocks.
 
