@@ -7,6 +7,7 @@ import com.worktrace.collector.FileWatcherServiceImpl;
 import com.worktrace.database.ActivityRepository;
 import com.worktrace.database.DatabaseManager;
 import com.worktrace.database.FileEventRepository;
+import com.worktrace.database.ProjectRepository;
 import com.worktrace.database.migration.DatabaseMigration;
 import com.worktrace.model.FileEvent;
 import com.worktrace.service.TimelineService;
@@ -69,6 +70,7 @@ public class WorkTraceApp extends Application {
         // 3. 持久化层
         FileEventRepository fileEventRepo     = new FileEventRepository();
         ActivityRepository activityRepo        = new ActivityRepository();
+        ProjectRepository projectRepo          = new ProjectRepository();
 
         // 4. 采集层 — 完整事件流接线
         CategoryClassifier classifier = new CategoryClassifier();
@@ -119,6 +121,7 @@ public class WorkTraceApp extends Application {
         controller.setWatcherService(watcherService);
         controller.setTimelineService(timelineService);
         controller.setFileEventRepository(fileEventRepo);
+        controller.setProjectRepository(projectRepo);
         controller.setOnStopCallback(this::stopWatching);
 
         // 8. 显示窗口（UI 立即出现）

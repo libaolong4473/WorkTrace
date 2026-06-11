@@ -3,6 +3,7 @@ package com.worktrace.database;
 import com.worktrace.model.ProjectInfo;
 
 import java.sql.*;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -192,6 +193,76 @@ public class ProjectRepository {
                 return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
             }
         }
+    }
+
+    // ==================== 统计 ====================
+
+    /**
+     * 项目统计数据。
+     */
+    public record ProjectStats(
+        long projectId,
+        String projectName,
+        String rootPath,
+        long activityCount,
+        long totalMinutes,
+        long filesModified,
+        String lastActiveTime
+    ) {}
+
+    /**
+     * 查询所有项目的统计信息。
+     * 通过 file_event.path LIKE project_info.root_path || '%' 关联。
+     *
+     * @param date 统计日期(当天)
+     */
+    public List<ProjectStats> getProjectStats(LocalDate date) throws SQLException {
+        String sql = """
+            SELECT
+                p.id AS project_id,
+                p.project_name,
+                p.root_path,
+                COUNT(DISTINCT ab.id) AS activity_count,
+                COALESCE(SUM(MAX(1, ROUND((julianday(ab.end_time) - julianday(ab.start_time)) * 1440))), 0) AS total_minutes,
+                (SELECT COUNT(DISTINCT fe.path)
+                 FROM file_event fe
+                 WHERE fe.path LIKE p.root_path || '%'
+                   AND fe.event_time >= ? AND fe.event_time < ?
+                ) AS files_modified,
+                (SELECT MAX(fe2.event_time)
+                 FROM file_event fe2
+                 WHERE fe2.path LIKE p.root_path || '%'
+                ) AS last_active
+            FROM project_info p
+            LEFT JOIN activity_block ab
+                ON ab.start_time >= ? AND ab.start_time < ?
+            GROUP BY p.id, p.project_name, p.root_path
+            ORDER BY total_minutes DESC
+            """;
+        String from = date.atStartOfDay().toString();
+        String to   = date.plusDays(1).atStartOfDay().toString();
+
+        List<ProjectStats> result = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, from);
+            ps.setString(2, to);
+            ps.setString(3, from);
+            ps.setString(4, to);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    result.add(new ProjectStats(
+                        rs.getLong("project_id"),
+                        rs.getString("project_name"),
+                        rs.getString("root_path"),
+                        rs.getLong("activity_count"),
+                        rs.getLong("total_minutes"),
+                        rs.getLong("files_modified"),
+                        rs.getString("last_active")
+                    ));
+                }
+            }
+        }
+        return result;
     }
 
     // ==================== 内部工具 ====================

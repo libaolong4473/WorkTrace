@@ -8,6 +8,9 @@ module com.worktrace {
     // JDBC
     requires java.sql;
 
+    // AWT (Desktop.open())
+    requires java.desktop;
+
     // 日志
     requires org.slf4j;
 

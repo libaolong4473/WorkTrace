@@ -58,6 +58,9 @@ public class FileWatcherServiceImpl implements FileWatcherService {
     private final Set<Path> rootDirs = ConcurrentHashMap.newKeySet();
     private final List<FileEventListener> listeners = new CopyOnWriteArrayList<>();
 
+    /** 事件防抖器：2 秒内同文件重复 MODIFY 只保留最后一次 */
+    private final EventDebouncer debouncer = new EventDebouncer(2000);
+
     /** 异步注册完成信号 */
     private volatile CountDownLatch registrationDone = new CountDownLatch(0);
 
@@ -269,18 +272,27 @@ public class FileWatcherServiceImpl implements FileWatcherService {
     // ========== 事件处理 ==========
 
     private void handleEvent(WatchEvent.Kind<?> kind, Path filePath) {
+        // 1. 目录级排除
         if (isExcluded(filePath)) return;
+
+        // 2. 噪声文件过滤
+        if (NoiseFilter.isNoise(filePath)) return;
 
         String eventType = mapKind(kind);
         if (eventType == null) return;
 
-        // 新目录 → 注册监听
+        // 3. 新目录 → 注册监听(不记录事件)
         if (kind == ENTRY_CREATE && Files.isDirectory(filePath)) {
             registerSingle(filePath);
             return;
         }
 
         if (Files.isDirectory(filePath)) return;
+
+        // 4. 事件防抖：2 秒内同文件重复 MODIFY 只保留最后一次
+        if (!debouncer.shouldPass(filePath, eventType, System.currentTimeMillis())) {
+            return;
+        }
 
         long size = safeGetSize(filePath);
 

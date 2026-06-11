@@ -90,28 +90,35 @@ public class ActivityBlockGenerator {
         sorted.sort(Comparator.comparing(FileEvent::getEventTime));
 
         // 2. 单遍扫描聚合
-        List<ActivityBlock> blocks = new ArrayList<>();
+        List<ActivityBlock> allBlocks = new ArrayList<>();
         AggregationContext ctx = null;
 
         for (FileEvent event : sorted) {
             if (ctx == null) {
-                // 首个事件，创建上下文
                 ctx = new AggregationContext(classifier, event);
             } else if (ctx.shouldMerge(event, config)) {
-                // 归入当前块
                 ctx.add(event);
             } else {
-                // 输出当前块，开始新块
-                blocks.add(ctx.toActivityBlock());
+                allBlocks.add(ctx.toActivityBlock());
                 ctx = new AggregationContext(classifier, event);
             }
         }
-
-        // 输出最后一个块
         if (ctx != null) {
-            blocks.add(ctx.toActivityBlock());
+            allBlocks.add(ctx.toActivityBlock());
         }
 
+        // 3. 过滤噪声块：丢弃持续时间 < minBlockMinutes 的碎片块
+        List<ActivityBlock> blocks = allBlocks.stream()
+            .filter(b -> {
+                long minutes = java.time.Duration.between(b.getStartTime(), b.getEndTime()).toMinutes();
+                return Math.max(minutes, 1) >= config.minBlockMinutes();
+            })
+            .toList();
+
+        int filtered = allBlocks.size() - blocks.size();
+        if (filtered > 0) {
+            LogUtil.info("过滤噪声块: " + filtered + " 个(持续时间 < " + config.minBlockMinutes() + " 分钟)");
+        }
         LogUtil.info("聚合完成: " + sorted.size() + " 个事件 → " + blocks.size() + " 个活动块");
         return blocks;
     }

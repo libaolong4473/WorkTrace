@@ -185,7 +185,7 @@ public class ActivityRepository {
     public List<CategoryDuration> durationByCategory(LocalDate date) throws SQLException {
         String sql = """
             SELECT category,
-                   SUM(CAST((julianday(end_time) - julianday(start_time)) * 1440 AS INTEGER)) AS minutes
+                   SUM(MAX(1, ROUND((julianday(end_time) - julianday(start_time)) * 1440))) AS minutes
             FROM activity_block
             WHERE start_time >= ? AND start_time < ?
             GROUP BY category
@@ -218,7 +218,7 @@ public class ActivityRepository {
      */
     public long totalDurationByDate(LocalDate date) throws SQLException {
         String sql = """
-            SELECT COALESCE(SUM(CAST((julianday(end_time) - julianday(start_time)) * 1440 AS INTEGER)), 0)
+            SELECT COALESCE(SUM(MAX(1, ROUND((julianday(end_time) - julianday(start_time)) * 1440))), 0)
             FROM activity_block
             WHERE start_time >= ? AND start_time < ?
             """;

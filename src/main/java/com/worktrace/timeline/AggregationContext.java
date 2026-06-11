@@ -71,27 +71,20 @@ public class AggregationContext {
     /**
      * 判断新事件是否应归入当前块。
      *
-     * 规则优先级：
-     *   1. 时间间隔 > maxGapMinutes → false (必须分裂)
-     *   2. 属于同一项目             → true  (同项目优先合并)
-     *   3. 文件类别相同             → true  (同类型优先合并)
-     *   4. 以上都不满足             → false (分裂)
+     * 核心原则：gap ≤ maxGapMinutes 时，尽可能合并，减少碎片化。
+     *
+     * 规则：
+     *   1. 时间间隔 > maxGapMinutes → 强制分裂
+     *   2. 时间间隔 ≤ maxGapMinutes → 合并(无论项目、类别是否相同)
+     *
+     * 设计理由：
+     *   用户在 15 分钟内连续工作，即使写了代码又改了配置，
+     *   本质上是同一次工作会话，不应被切割成多个碎片块。
+     *   类别混合时，主类别由 categoryCounts 中权重最高的决定。
      */
     public boolean shouldMerge(FileEvent event, MergeConfig config) {
-        // 规则 1：时间间隔
         long gapMinutes = java.time.Duration.between(endTime, event.getEventTime()).toMinutes();
-        if (gapMinutes > config.maxGapMinutes()) {
-            return false;
-        }
-        // 规则 2：同项目
-        if (config.projectPriority() && containsProject(event)) {
-            return true;
-        }
-        // 规则 3：同类别
-        if (config.categoryPriority() && isSameCategory(event)) {
-            return true;
-        }
-        return false;
+        return gapMinutes <= config.maxGapMinutes();
     }
 
     /**

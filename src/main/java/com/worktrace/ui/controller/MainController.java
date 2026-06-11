@@ -2,11 +2,13 @@ package com.worktrace.ui.controller;
 
 import com.worktrace.collector.FileWatcherService;
 import com.worktrace.database.FileEventRepository;
+import com.worktrace.database.ProjectRepository;
 import com.worktrace.model.ActivityBlock;
 import com.worktrace.model.FileEvent;
 import com.worktrace.service.TimelineService;
 import com.worktrace.ui.view.ActivityBlockCell;
 import com.worktrace.ui.view.FileDetailCell;
+import com.worktrace.ui.view.ProjectStatsCell;
 
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -95,13 +97,20 @@ public class MainController implements Initializable {
     private FileWatcherService watcherService;
     private TimelineService timelineService;
     private FileEventRepository fileEventRepository;
+    private ProjectRepository projectRepository;
     private Runnable onStopCallback;
 
     // ---------- 状态 ----------
     private final ObservableList<ActivityBlock> blockData = FXCollections.observableArrayList();
     private final ObservableList<String> fileDetailData = FXCollections.observableArrayList();
+    private final ObservableList<ProjectRepository.ProjectStats> projectStatsData = FXCollections.observableArrayList();
     private Button activeNavButton;
     private Timeline autoRefreshTimeline;
+
+    // ---------- 根面板 + 视图切换 ----------
+    @FXML private javafx.scene.layout.BorderPane rootPane;
+    private String currentView = "overview";
+    private javafx.scene.Node timelineCenterNode;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
@@ -111,6 +120,11 @@ public class MainController implements Initializable {
         initWatchToggle();
 
         lblTimelineDate.setText(LocalDate.now().format(DATE_FMT));
+
+        // 保存时间线中心节点(FXML 加载完成后赋值)
+        javafx.application.Platform.runLater(() -> {
+            timelineCenterNode = rootPane.getCenter();
+        });
     }
 
     // ==================== 初始化 ====================
@@ -283,15 +297,66 @@ public class MainController implements Initializable {
         }
         source.getStyleClass().add("nav-button-active");
         activeNavButton = source;
+        currentView = view;
 
-        lblTimelineTitle.setText(switch (view) {
-            case "overview" -> "今日时间线";
-            case "timeline" -> "全部时间线";
-            case "projects" -> "项目统计";
-            default -> "时间线";
-        });
+        if ("projects".equals(view)) {
+            // 切换到项目统计视图
+            rootPane.setCenter(createProjectStatsPanel());
+            loadProjectStats();
+            lblStatusText.setText("项目统计");
+        } else {
+            // 切换回时间线视图
+            if (timelineCenterNode != null) {
+                rootPane.setCenter(timelineCenterNode);
+            }
+            lblTimelineTitle.setText(switch (view) {
+                case "overview" -> "今日时间线";
+                case "timeline" -> "全部时间线";
+                default -> "时间线";
+            });
+            lblStatusText.setText("切换到: " + source.getText().trim());
+        }
+    }
 
-        lblStatusText.setText("切换到: " + source.getText().trim());
+    /**
+     * 创建项目统计面板。
+     */
+    private VBox createProjectStatsPanel() {
+        Label title = new Label("项目统计");
+        title.getStyleClass().add("timeline-header");
+
+        Label date = new Label(LocalDate.now().format(DATE_FMT));
+        date.getStyleClass().add("timeline-date");
+
+        HBox header = new HBox(12, title, new Region(), date);
+        HBox.setHgrow(header.getChildren().get(1), Priority.ALWAYS);
+        header.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+
+        ListView<ProjectRepository.ProjectStats> statsList = new ListView<>(projectStatsData);
+        statsList.setCellFactory(list -> new ProjectStatsCell());
+        statsList.setFixedCellSize(90);
+        statsList.setPlaceholder(new Label("暂无项目数据"));
+        statsList.getStyleClass().add("timeline-list");
+
+        VBox panel = new VBox(8, header, statsList);
+        VBox.setVgrow(statsList, Priority.ALWAYS);
+        panel.setPadding(new javafx.geometry.Insets(12));
+        panel.getStyleClass().add("timeline-panel");
+        return panel;
+    }
+
+    /**
+     * 加载项目统计数据。
+     */
+    private void loadProjectStats() {
+        if (projectRepository == null) return;
+        try {
+            var stats = projectRepository.getProjectStats(LocalDate.now());
+            projectStatsData.setAll(stats);
+            lblStatusText.setText("已加载 " + stats.size() + " 个项目");
+        } catch (Exception e) {
+            lblStatusText.setText("加载项目统计失败: " + e.getMessage());
+        }
     }
 
     // ==================== 状态更新 ====================
@@ -341,6 +406,10 @@ public class MainController implements Initializable {
 
     public void setFileEventRepository(FileEventRepository repo) {
         this.fileEventRepository = repo;
+    }
+
+    public void setProjectRepository(ProjectRepository repo) {
+        this.projectRepository = repo;
     }
 
     public void setOnStopCallback(Runnable callback) {
