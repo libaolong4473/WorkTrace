@@ -1,5 +1,6 @@
 package com.worktrace.collector;
 
+import com.worktrace.util.Config;
 import com.worktrace.util.LogUtil;
 
 import java.io.IOException;
@@ -8,64 +9,77 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.nio.file.StandardWatchEventKinds.*;
 
 /**
  * FileWatcherService 的完整实现。
  *
- * 线程模型：
- * ┌─────────────────────────────────────────────────────────────────┐
- * │  [WatchThread]  (单守护线程，阻塞式轮询 WatchService)           │
- * │       │                                                         │
- * │       │  take() → 获取 WatchKey                                  │
- * │       │  遍历事件 → 过滤 → 构建 FileEvent → 回调 listener       │
- * │       │  若新目录 → 递归注册                                     │
- * │       ▼                                                         │
- * │  [Listener]  (在 WatchThread 上同步执行)                        │
- * │       │                                                         │
- * │       ▼                                                         │
- * │  [FileEventDao.insert()]  (SQLite WAL 模式，写操作自动串行化)   │
- * └─────────────────────────────────────────────────────────────────┘
+ * 启动优化：
+ *   - 目录注册在后台线程异步执行，不阻塞 UI
+ *   - 可配置排除目录列表 (watch.exclude.dirs)
+ *   - 默认排除 .git / node_modules / target / build / ShaderCache 等
  *
- * 关键设计：
- *   1. watchDirMap: WatchKey → Path 双向映射，用于事件发生时反查目录
- *   2. rootDirs: 记录用户注册的根目录，用于 getWatchedDirectories()
- *   3. 新目录创建时自动递归注册，实现深度监听
- *   4. 忽略 .git / node_modules / target / __pycache__ 等噪声目录
- *   5. 程序退出时优雅关闭 WatchService
+ * 线程模型：
+ *   ┌───────────────────────────────────────────────────────┐
+ *   │  [RegisterThread]  启动时异步遍历目录树并注册          │
+ *   │       │                                               │
+ *   │       ▼                                               │
+ *   │  [WatchThread]     阻塞式轮询 WatchService            │
+ *   │       │                                               │
+ *   │       ▼                                               │
+ *   │  [Listener]        回调 → FileEventRepo + Aggregator  │
+ *   └───────────────────────────────────────────────────────┘
  */
 public class FileWatcherServiceImpl implements FileWatcherService {
 
-    /** 需要忽略的目录名集合 */
-    private static final Set<String> IGNORED_DIRS = Set.of(
-        ".git", "node_modules", "target", "__pycache__",
-        ".idea", ".vscode", ".gradle", "build", "dist", ".worktrace"
+    /** 默认排除目录（硬编码保底） */
+    private static final Set<String> DEFAULT_EXCLUDED = Set.of(
+        ".git", ".idea", ".vscode", ".gradle",
+        "node_modules", "target", "build", "dist", "out",
+        ".cache", "__pycache__", "ShaderCache",
+        ".worktrace", "Thumbs.db"
     );
 
-    /** 文件大小上限：超过此值的文件不记录大小(避免读取超大文件) */
-    private static final long MAX_SIZE_READ_BYTES = 100 * 1024 * 1024; // 100MB
+    /** 文件大小上限 */
+    private static final long MAX_SIZE_READ_BYTES = 100 * 1024 * 1024;
 
     private WatchService watchService;
     private Thread watchThread;
     private volatile boolean running = false;
 
-    /** WatchKey → 所属目录路径 */
+    /** 合并后的排除目录集合（默认 + 用户配置） */
+    private final Set<String> excludedDirs = new HashSet<>();
+
     private final Map<WatchKey, Path> watchKeyToPath = new ConcurrentHashMap<>();
-
-    /** 目录路径 → WatchKey (用于 unwatch) */
     private final Map<Path, WatchKey> pathToWatchKey = new ConcurrentHashMap<>();
-
-    /** 用户注册的根目录集合 */
     private final Set<Path> rootDirs = ConcurrentHashMap.newKeySet();
-
-    /** 事件监听器列表(线程安全) */
     private final List<FileEventListener> listeners = new CopyOnWriteArrayList<>();
+
+    /** 异步注册完成信号 */
+    private volatile CountDownLatch registrationDone = new CountDownLatch(0);
+
+    public FileWatcherServiceImpl() {
+        // 合并默认排除 + 用户配置排除
+        excludedDirs.addAll(DEFAULT_EXCLUDED);
+        String userExcludes = Config.getInstance().getString("watch.exclude.dirs", "");
+        if (userExcludes != null && !userExcludes.isBlank()) {
+            for (String s : userExcludes.split(";")) {
+                String trimmed = s.trim();
+                if (!trimmed.isEmpty()) {
+                    excludedDirs.add(trimmed);
+                }
+            }
+        }
+        LogUtil.info("排除目录列表: " + excludedDirs);
+    }
 
     @Override
     public void start() {
         if (running) {
-            LogUtil.warn("FileWatcherService 已在运行，忽略重复启动");
+            LogUtil.warn("FileWatcherService 已在运行");
             return;
         }
         try {
@@ -76,16 +90,75 @@ public class FileWatcherServiceImpl implements FileWatcherService {
         }
 
         running = true;
+
+        // 启动事件轮询线程
         watchThread = new Thread(this::pollLoop, "worktrace-watcher");
         watchThread.setDaemon(true);
         watchThread.start();
 
-        // 重新注册所有已配置的目录(支持 stop → start 重启场景)
-        for (Path dir : rootDirs) {
-            registerTree(dir);
+        // 异步注册目录（不阻塞调用线程）
+        if (!rootDirs.isEmpty()) {
+            List<Path> dirsToRegister = List.copyOf(rootDirs);
+            registrationDone = new CountDownLatch(1);
+            Thread registerThread = new Thread(() -> {
+                registerDirectoriesAsync(dirsToRegister);
+                registrationDone.countDown();
+            }, "worktrace-register");
+            registerThread.setDaemon(true);
+            registerThread.start();
         }
 
-        LogUtil.info("FileWatcherService 已启动，监听 " + pathToWatchKey.size() + " 个目录");
+        LogUtil.info("FileWatcherService 已启动 (目录注册异步进行中)");
+    }
+
+    /**
+     * 异步注册目录树。
+     * 先注册根目录（立即开始接收事件），再递归注册子目录。
+     */
+    private void registerDirectoriesAsync(List<Path> dirs) {
+        AtomicInteger totalRegistered = new AtomicInteger(0);
+        long startTime = System.currentTimeMillis();
+
+        for (Path dir : dirs) {
+            if (!Files.isDirectory(dir)) continue;
+            // 先注册根目录本身（立即生效）
+            registerSingle(dir);
+            totalRegistered.incrementAndGet();
+            // 再递归注册子目录
+            registerSubdirectories(dir, totalRegistered);
+        }
+
+        long elapsed = System.currentTimeMillis() - startTime;
+        LogUtil.info("目录注册完成: " + totalRegistered.get() + " 个目录, 耗时 " + elapsed + "ms");
+    }
+
+    /**
+     * 递归注册子目录（跳过排除目录）。
+     */
+    private void registerSubdirectories(Path root, AtomicInteger counter) {
+        try {
+            Files.walkFileTree(root, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    if (!running) return FileVisitResult.TERMINATE;
+                    if (isExcluded(dir) && !dir.equals(root)) {
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                    if (!dir.equals(root)) {
+                        registerSingle(dir);
+                        counter.incrementAndGet();
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFileFailed(Path file, IOException exc) {
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException e) {
+            LogUtil.error("递归注册失败: " + root + " - " + e.getMessage());
+        }
     }
 
     @Override
@@ -101,7 +174,6 @@ public class FileWatcherServiceImpl implements FileWatcherService {
                 LogUtil.error("关闭 WatchService 失败: " + e.getMessage());
             }
         }
-        // 只清空 WatchKey 映射，保留 rootDirs 以便 start() 时重新注册
         watchKeyToPath.clear();
         pathToWatchKey.clear();
         LogUtil.info("FileWatcherService 已停止");
@@ -115,7 +187,7 @@ public class FileWatcherServiceImpl implements FileWatcherService {
         }
         rootDirs.add(dir.toAbsolutePath());
         if (running && watchService != null) {
-            registerTree(dir);
+            registerSingle(dir);
         }
     }
 
@@ -130,7 +202,6 @@ public class FileWatcherServiceImpl implements FileWatcherService {
     public void unwatchDirectory(Path dir) {
         Path absDir = dir.toAbsolutePath();
         rootDirs.remove(absDir);
-        // 取消该目录及其所有子目录的 WatchKey
         var iterator = watchKeyToPath.entrySet().iterator();
         while (iterator.hasNext()) {
             var entry = iterator.next();
@@ -158,14 +229,14 @@ public class FileWatcherServiceImpl implements FileWatcherService {
         return running;
     }
 
-    // ========== 核心轮询循环 ==========
+    // ========== 事件轮询 ==========
 
     private void pollLoop() {
-        LogUtil.info("监听线程已启动，等待事件... (已注册 " + watchKeyToPath.size() + " 个 WatchKey)");
+        LogUtil.info("监听线程已启动，等待事件...");
         while (running) {
             WatchKey key;
             try {
-                key = watchService.take(); // 阻塞直到有事件
+                key = watchService.take();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
@@ -180,9 +251,7 @@ public class FileWatcherServiceImpl implements FileWatcherService {
             }
 
             for (WatchEvent<?> event : key.pollEvents()) {
-                if (event.kind() == OVERFLOW) {
-                    continue;
-                }
+                if (event.kind() == OVERFLOW) continue;
                 @SuppressWarnings("unchecked")
                 WatchEvent<Path> ev = (WatchEvent<Path>) event;
                 handleEvent(ev.kind(), dir.resolve(ev.context()));
@@ -200,34 +269,21 @@ public class FileWatcherServiceImpl implements FileWatcherService {
     // ========== 事件处理 ==========
 
     private void handleEvent(WatchEvent.Kind<?> kind, Path filePath) {
-        LogUtil.info("收到事件: " + kind + " → " + filePath);
-
-        // 过滤被忽略的目录
-        if (isUnderIgnoredDir(filePath)) {
-            LogUtil.info("  → 已过滤(忽略目录)");
-            return;
-        }
+        if (isExcluded(filePath)) return;
 
         String eventType = mapKind(kind);
-        if (eventType == null) {
-            return;
-        }
+        if (eventType == null) return;
 
-        // 如果是新创建的目录，自动注册递归监听
+        // 新目录 → 注册监听
         if (kind == ENTRY_CREATE && Files.isDirectory(filePath)) {
-            registerTree(filePath);
-            // 目录创建事件本身不记录(没有文件大小意义)
+            registerSingle(filePath);
             return;
         }
 
-        // 只处理文件事件，不处理目录事件
-        if (Files.isDirectory(filePath)) {
-            return;
-        }
+        if (Files.isDirectory(filePath)) return;
 
         long size = safeGetSize(filePath);
 
-        // 通知所有监听器
         for (FileEventListener listener : listeners) {
             try {
                 listener.onFileEvent(eventType, filePath, size);
@@ -246,56 +302,25 @@ public class FileWatcherServiceImpl implements FileWatcherService {
 
     // ========== 目录注册 ==========
 
-    /**
-     * 递归注册目录树。遍历所有子目录，逐个注册到 WatchService。
-     */
-    private void registerTree(Path root) {
-        if (!Files.isDirectory(root) || isUnderIgnoredDir(root)) {
-            return;
-        }
-        try {
-            Files.walkFileTree(root, new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                    if (isUnderIgnoredDir(dir) && !dir.equals(root)) {
-                        return FileVisitResult.SKIP_SUBTREE;
-                    }
-                    registerSingle(dir);
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFileFailed(Path file, IOException exc) {
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-        } catch (IOException e) {
-            LogUtil.error("递归注册目录失败: " + root + " - " + e.getMessage());
-        }
-    }
-
-    /**
-     * 将单个目录注册到 WatchService。
-     */
     private void registerSingle(Path dir) {
-        if (pathToWatchKey.containsKey(dir)) {
-            return; // 已注册
-        }
+        if (pathToWatchKey.containsKey(dir)) return;
         try {
             WatchKey key = dir.register(watchService, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE);
             watchKeyToPath.put(key, dir);
             pathToWatchKey.put(dir, key);
-            LogUtil.info("已注册监听: " + dir);
         } catch (IOException e) {
-            LogUtil.warn("注册目录失败(可能无权限): " + dir + " - " + e.getMessage());
+            // 静默跳过无权限目录
         }
     }
 
     // ========== 工具方法 ==========
 
-    private boolean isUnderIgnoredDir(Path path) {
+    /**
+     * 判断路径是否在排除目录下。
+     */
+    private boolean isExcluded(Path path) {
         for (Path part : path) {
-            if (IGNORED_DIRS.contains(part.toString())) {
+            if (excludedDirs.contains(part.toString())) {
                 return true;
             }
         }

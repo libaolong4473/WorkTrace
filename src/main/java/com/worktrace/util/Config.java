@@ -38,6 +38,7 @@ public class Config {
         // 加载默认值
         props.setProperty("watch.dirs",           System.getProperty("user.home") + "\\Desktop;" +
                                                   System.getProperty("user.home") + "\\Documents");
+        props.setProperty("watch.exclude.dirs",   ".git;.idea;node_modules;target;build;dist;out;.cache;__pycache__;ShaderCache;.vscode;.gradle;.worktrace;Thumbs.db");
         props.setProperty("aggregate.gap.minutes", "5");
         props.setProperty("db.path",              CONFIG_DIR.resolve("worktrace.db").toString());
 

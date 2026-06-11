@@ -98,22 +98,14 @@ public class WorkTraceApp extends Application {
             event.setSize(size);
             event.setEventTime(LocalDateTime.now());
 
-            // 1) 原始事件写入 file_event 表
             try {
                 fileEventRepo.insert(event);
             } catch (Exception e) {
                 LogUtil.error("保存文件事件失败: " + e.getMessage());
             }
 
-            // 2) 喂入聚合器(缓冲区满时自动触发聚合 + 持久化)
             aggregator.accept(event);
         });
-
-        // 从配置读取监听目录并启动
-        List<Path> watchDirs = parseWatchDirs(config.getString("watch.dirs"));
-        watcherService.watchDirectories(watchDirs);
-        watcherService.start();
-        LogUtil.info("已注册监听目录: " + watchDirs);
 
         // 5. 业务服务层
         TimelineService timelineService = new TimelineServiceImpl(activityRepo);
@@ -129,13 +121,18 @@ public class WorkTraceApp extends Application {
         controller.setFileEventRepository(fileEventRepo);
         controller.setOnStopCallback(this::stopWatching);
 
-        // 8. 显示窗口
+        // 8. 显示窗口（UI 立即出现）
         Scene scene = new Scene(root, 960, 640);
         primaryStage.setTitle("WorkTrace - 个人工作轨迹");
         primaryStage.setScene(scene);
         primaryStage.show();
+        LogUtil.info("UI 已显示");
 
-        LogUtil.info("WorkTrace 启动完成");
+        // 9. 异步启动监听（不阻塞 UI，目录注册在后台线程进行）
+        List<Path> watchDirs = parseWatchDirs(config.getString("watch.dirs"));
+        watcherService.watchDirectories(watchDirs);
+        watcherService.start();
+        LogUtil.info("监听已异步启动: " + watchDirs);
     }
 
     @Override
