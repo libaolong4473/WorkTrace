@@ -18,3 +18,9 @@ Desktop.ini
 *.db
 *.db-wal
 *.db-shm
+
+# Docs (local audit reports, not for remote)
+docs/audit-report.md
+
+# Temp files
+*.tmp.*

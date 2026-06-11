@@ -6,16 +6,15 @@ import java.util.Map;
  * 活动类别分类器。
  * 根据文件扩展名和路径特征判断活动类别。
  *
- * 职责：
- *   - 根据文件扩展名判定类别
- *   - 支持自定义分类规则
- *
  * 分类规则：
  *   CODE     → java, py, js, ts, c, cpp, go, rs, kt, swift, sql ...
- *   DOCUMENT → doc, docx, pdf, md, txt, xlsx, pptx ...
+ *   DOCUMENT → doc, docx, pdf, md, txt, xlsx, pptx, csv ...
+ *   IMAGE    → png, jpg, jpeg, gif, svg, webp, bmp, ico ...
+ *   VIDEO    → mp4, avi, mkv, mov, wmv, flv ...
  *   CONFIG   → xml, json, yaml, yml, properties, toml, ini, env ...
- *   MEDIA    → png, jpg, mp3, mp4, gif, svg, webp ...
  *   OTHER    → 其余所有
+ *
+ * 聚合引擎使用此类判断文件应归入哪个 ActivityBlock。
  */
 public class CategoryClassifier {
 
@@ -28,6 +27,8 @@ public class CategoryClassifier {
         Map.entry("c",        "CODE"),
         Map.entry("cpp",      "CODE"),
         Map.entry("h",        "CODE"),
+        Map.entry("hpp",      "CODE"),
+        Map.entry("cs",       "CODE"),
         Map.entry("go",       "CODE"),
         Map.entry("rs",       "CODE"),
         Map.entry("kt",       "CODE"),
@@ -35,9 +36,14 @@ public class CategoryClassifier {
         Map.entry("sql",      "CODE"),
         Map.entry("sh",       "CODE"),
         Map.entry("bat",      "CODE"),
+        Map.entry("ps1",      "CODE"),
         Map.entry("vue",      "CODE"),
         Map.entry("jsx",      "CODE"),
         Map.entry("tsx",      "CODE"),
+        Map.entry("html",     "CODE"),
+        Map.entry("css",      "CODE"),
+        Map.entry("scss",     "CODE"),
+        Map.entry("less",     "CODE"),
         // DOCUMENT
         Map.entry("doc",      "DOCUMENT"),
         Map.entry("docx",     "DOCUMENT"),
@@ -45,8 +51,36 @@ public class CategoryClassifier {
         Map.entry("md",       "DOCUMENT"),
         Map.entry("txt",      "DOCUMENT"),
         Map.entry("xlsx",     "DOCUMENT"),
+        Map.entry("xls",      "DOCUMENT"),
         Map.entry("pptx",     "DOCUMENT"),
+        Map.entry("ppt",      "DOCUMENT"),
         Map.entry("csv",      "DOCUMENT"),
+        Map.entry("rtf",      "DOCUMENT"),
+        Map.entry("odt",      "DOCUMENT"),
+        // IMAGE
+        Map.entry("png",      "IMAGE"),
+        Map.entry("jpg",      "IMAGE"),
+        Map.entry("jpeg",     "IMAGE"),
+        Map.entry("gif",      "IMAGE"),
+        Map.entry("svg",      "IMAGE"),
+        Map.entry("webp",     "IMAGE"),
+        Map.entry("bmp",      "IMAGE"),
+        Map.entry("ico",      "IMAGE"),
+        Map.entry("tiff",     "IMAGE"),
+        Map.entry("psd",      "IMAGE"),
+        Map.entry("ai",       "IMAGE"),
+        // VIDEO
+        Map.entry("mp4",      "VIDEO"),
+        Map.entry("avi",      "VIDEO"),
+        Map.entry("mkv",      "VIDEO"),
+        Map.entry("mov",      "VIDEO"),
+        Map.entry("wmv",      "VIDEO"),
+        Map.entry("flv",      "VIDEO"),
+        Map.entry("webm",     "VIDEO"),
+        Map.entry("mp3",      "VIDEO"),
+        Map.entry("wav",      "VIDEO"),
+        Map.entry("flac",     "VIDEO"),
+        Map.entry("aac",      "VIDEO"),
         // CONFIG
         Map.entry("xml",      "CONFIG"),
         Map.entry("json",     "CONFIG"),
@@ -56,15 +90,8 @@ public class CategoryClassifier {
         Map.entry("toml",     "CONFIG"),
         Map.entry("ini",      "CONFIG"),
         Map.entry("env",      "CONFIG"),
-        // MEDIA
-        Map.entry("png",      "MEDIA"),
-        Map.entry("jpg",      "MEDIA"),
-        Map.entry("jpeg",     "MEDIA"),
-        Map.entry("gif",      "MEDIA"),
-        Map.entry("svg",      "MEDIA"),
-        Map.entry("mp3",      "MEDIA"),
-        Map.entry("mp4",      "MEDIA"),
-        Map.entry("webp",     "MEDIA")
+        Map.entry("cfg",      "CONFIG"),
+        Map.entry("conf",     "CONFIG")
     );
 
     /**
@@ -78,5 +105,12 @@ public class CategoryClassifier {
             return "OTHER";
         }
         return CATEGORY_RULES.getOrDefault(extension.toLowerCase(), "OTHER");
+    }
+
+    /**
+     * 判断两个类别是否相同。
+     */
+    public boolean isSameCategory(String ext1, String ext2) {
+        return classify(ext1).equals(classify(ext2));
     }
 }

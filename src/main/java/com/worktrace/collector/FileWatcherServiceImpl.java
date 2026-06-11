@@ -79,7 +79,13 @@ public class FileWatcherServiceImpl implements FileWatcherService {
         watchThread = new Thread(this::pollLoop, "worktrace-watcher");
         watchThread.setDaemon(true);
         watchThread.start();
-        LogUtil.info("FileWatcherService 已启动");
+
+        // 重新注册所有已配置的目录(支持 stop → start 重启场景)
+        for (Path dir : rootDirs) {
+            registerTree(dir);
+        }
+
+        LogUtil.info("FileWatcherService 已启动，监听 " + pathToWatchKey.size() + " 个目录");
     }
 
     @Override
@@ -95,9 +101,9 @@ public class FileWatcherServiceImpl implements FileWatcherService {
                 LogUtil.error("关闭 WatchService 失败: " + e.getMessage());
             }
         }
+        // 只清空 WatchKey 映射，保留 rootDirs 以便 start() 时重新注册
         watchKeyToPath.clear();
         pathToWatchKey.clear();
-        rootDirs.clear();
         LogUtil.info("FileWatcherService 已停止");
     }
 
@@ -155,7 +161,7 @@ public class FileWatcherServiceImpl implements FileWatcherService {
     // ========== 核心轮询循环 ==========
 
     private void pollLoop() {
-        LogUtil.info("监听线程已启动，等待事件...");
+        LogUtil.info("监听线程已启动，等待事件... (已注册 " + watchKeyToPath.size() + " 个 WatchKey)");
         while (running) {
             WatchKey key;
             try {
@@ -194,8 +200,11 @@ public class FileWatcherServiceImpl implements FileWatcherService {
     // ========== 事件处理 ==========
 
     private void handleEvent(WatchEvent.Kind<?> kind, Path filePath) {
+        LogUtil.info("收到事件: " + kind + " → " + filePath);
+
         // 过滤被忽略的目录
         if (isUnderIgnoredDir(filePath)) {
+            LogUtil.info("  → 已过滤(忽略目录)");
             return;
         }
 

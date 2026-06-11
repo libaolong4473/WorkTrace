@@ -80,6 +80,11 @@
                 <configuration>
                     <mainClass>${main.class}</mainClass>
                     <executable>${java.home}/bin/java</executable>
+                    <options>
+                        <option>-Dfile.encoding=UTF-8</option>
+                        <option>-Dsun.stdout.encoding=UTF-8</option>
+                        <option>-Dsun.stderr.encoding=UTF-8</option>
+                    </options>
                 </configuration>
             </plugin>
         </plugins>

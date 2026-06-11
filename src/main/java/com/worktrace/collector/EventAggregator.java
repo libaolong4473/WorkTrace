@@ -2,47 +2,140 @@ package com.worktrace.collector;
 
 import com.worktrace.model.ActivityBlock;
 import com.worktrace.model.FileEvent;
+import com.worktrace.timeline.ActivityBlockGenerator;
+import com.worktrace.timeline.MergeConfig;
+import com.worktrace.util.LogUtil;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
- * 事件聚合器。
- * 将大量原始 FileEvent 聚合为少数有意义的 ActivityBlock。
+ * 事件聚合器 —— 连接采集层与时间线层的桥梁。
  *
- * 职责：
- *   - 接收实时 FileEvent 流
- *   - 按时间窗口(默认 5 分钟)和路径分组
- *   - 合并同组事件为一个 ActivityBlock
- *   - 委托 CategoryClassifier 确定活动类别
+ * 完整事件流：
+ *   FileWatcherService
+ *       → listener.onFileEvent()
+ *           → FileEventRepository.insert(event)     // 原始事件持久化
+ *           → EventAggregator.accept(event)          // 喂入聚合器
+ *               → buffer 攒批
+ *               → 达到阈值 → flush()
+ *                   → ActivityBlockGenerator.generate(events)
+ *                   → onFlush callback → ActivityRepository.batchInsert(blocks)
+ *                   → 清空已完成块(释放内存)
  *
- * 设计说明：
- *   内部维护一个 pendingEvents 缓冲区，
- *   当事件间隔超过阈值或缓冲区满时触发一次聚合。
+ * 线程模型：
+ *   FileWatcherService 的 watcher 线程调用 accept()，
+ *   flush() 也在 watcher 线程上同步执行(包含 DB 写入)。
+ *   buffer 使用 synchronized 保证线程安全。
  */
 public class EventAggregator {
 
-    private static final long GAP_THRESHOLD_MS = 5 * 60 * 1000; // 5 分钟
+    private final ActivityBlockGenerator generator;
+    private final List<FileEvent> buffer = new ArrayList<>();
+    private final List<ActivityBlock> completedBlocks = new ArrayList<>();
+    private final Consumer<List<ActivityBlock>> onFlush;
 
-    private final CategoryClassifier classifier;
+    private final int batchSize;
 
-    public EventAggregator(CategoryClassifier classifier) {
-        this.classifier = classifier;
+    /**
+     * @param classifier 类别分类器
+     * @param onFlush    聚合完成后的回调(通常用于持久化到 ActivityRepository)
+     */
+    public EventAggregator(CategoryClassifier classifier, Consumer<List<ActivityBlock>> onFlush) {
+        this.generator = new ActivityBlockGenerator(classifier, MergeConfig.DEFAULT);
+        this.batchSize = 100;
+        this.onFlush   = onFlush;
     }
 
     /**
-     * 喂入一条文件事件。当满足聚合条件时返回一个 ActivityBlock，否则返回 null。
+     * @param classifier 类别分类器
+     * @param config     聚合配置
+     * @param batchSize  批量阈值(缓冲区满时自动触发聚合)
+     * @param onFlush    聚合完成后的回调
      */
-    public ActivityBlock onEvent(FileEvent event) {
-        // TODO: 实现聚合逻辑
-        return null;
+    public EventAggregator(CategoryClassifier classifier, MergeConfig config,
+                           int batchSize, Consumer<List<ActivityBlock>> onFlush) {
+        this.generator = new ActivityBlockGenerator(classifier, config);
+        this.batchSize = batchSize;
+        this.onFlush   = onFlush;
     }
 
     /**
-     * 刷新缓冲区，将尚未聚合的事件输出为 ActivityBlock。
-     * 通常在应用退出或日期切换时调用。
+     * 接收一条文件事件。缓冲区满时自动触发聚合 + 回调。
+     *
+     * @param event 新的文件事件
      */
-    public ActivityBlock flush() {
-        // TODO: 实现刷新逻辑
-        return null;
+    public void accept(FileEvent event) {
+        synchronized (buffer) {
+            buffer.add(event);
+            if (buffer.size() >= batchSize) {
+                flush();
+            }
+        }
+    }
+
+    /**
+     * 批量接收文件事件。
+     *
+     * @param events 文件事件列表
+     */
+    public void acceptAll(List<FileEvent> events) {
+        synchronized (buffer) {
+            buffer.addAll(events);
+            if (buffer.size() >= batchSize) {
+                flush();
+            }
+        }
+    }
+
+    /**
+     * 刷新缓冲区：聚合 → 回调 → 清空已完成块。
+     * 应用退出时必须调用此方法，否则缓冲区中的事件会丢失。
+     */
+    public void flush() {
+        synchronized (buffer) {
+            if (buffer.isEmpty()) {
+                return;
+            }
+            List<FileEvent> toProcess = new ArrayList<>(buffer);
+            buffer.clear();
+
+            // 聚合
+            List<ActivityBlock> newBlocks = generator.generate(toProcess);
+            completedBlocks.addAll(newBlocks);
+
+            // 回调(持久化到 ActivityRepository)
+            if (onFlush != null && !newBlocks.isEmpty()) {
+                try {
+                    onFlush.accept(newBlocks);
+                } catch (Exception e) {
+                    LogUtil.error("聚合回调执行失败: " + e.getMessage());
+                }
+            }
+
+            LogUtil.info("聚合器产出 " + newBlocks.size() + " 个活动块");
+
+            // 清空已完成块(已通过回调持久化，无需继续占用内存)
+            completedBlocks.clear();
+        }
+    }
+
+    /**
+     * 获取当前缓冲区大小。
+     */
+    public int getBufferSize() {
+        synchronized (buffer) {
+            return buffer.size();
+        }
+    }
+
+    /**
+     * 获取累计产出的活动块数量(仅统计未 flush 的)。
+     */
+    public int getCompletedCount() {
+        synchronized (buffer) {
+            return completedBlocks.size();
+        }
     }
 }

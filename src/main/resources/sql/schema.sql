@@ -24,11 +24,15 @@ CREATE TABLE IF NOT EXISTS activity_block (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     start_time  TEXT    NOT NULL,               -- ISO-8601
     end_time    TEXT    NOT NULL,               -- ISO-8601
-    category    TEXT    DEFAULT 'OTHER',        -- CODE / DOCUMENT / CONFIG / MEDIA / OTHER
+    category    TEXT    DEFAULT 'OTHER',        -- CODE / DOCUMENT / IMAGE / VIDEO / CONFIG / OTHER
     summary     TEXT    DEFAULT ''              -- 人工或 AI 生成的摘要
 );
 
 CREATE INDEX IF NOT EXISTS idx_activity_block_time ON activity_block(start_time, end_time);
+
+-- 防重复：同一时间段 + 同一类别只能有一条记录
+CREATE UNIQUE INDEX IF NOT EXISTS idx_activity_block_dedup
+    ON activity_block(start_time, end_time, category);
 
 -- 项目信息表：自动识别或手动配置的项目根目录
 CREATE TABLE IF NOT EXISTS project_info (

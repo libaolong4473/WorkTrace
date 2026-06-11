@@ -1,52 +1,305 @@
-/* WorkTrace 主题样式 */
+/*
+ * WorkTrace — IntelliJ IDEA 工具窗口风格
+ * 暗色主题 + 现代扁平化
+ */
 
 /* ===== 全局 ===== */
 .root {
-    -fx-font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    -fx-font-family: "JetBrains Mono", "Microsoft YaHei", "Segoe UI", monospace;
     -fx-font-size: 13px;
-    -fx-background-color: #FAFAFA;
+    -fx-background-color: #2B2D30;
+    -fx-text-fill: #BBBBBB;
 }
 
 /* ===== 顶部状态栏 ===== */
 .top-bar {
-    -fx-background-color: #263238;
-    -fx-text-fill: #ECEFF1;
+    -fx-background-color: #3C3F41;
+    -fx-padding: 0 16;
+    -fx-border-color: #323232;
+    -fx-border-width: 0 0 1 0;
 }
 
-.status-label {
-    -fx-font-size: 14px;
+.status-indicator {
+    -fx-font-size: 13px;
     -fx-font-weight: bold;
+}
+
+.status-running {
+    -fx-text-fill: #6AAB73;
+}
+
+.status-stopped {
+    -fx-text-fill: #DB5860;
+}
+
+.top-bar-label {
+    -fx-text-fill: #999999;
+    -fx-font-size: 12px;
+}
+
+.top-bar-separator {
+    -fx-background-color: #555555;
 }
 
 /* ===== 左侧边栏 ===== */
 .sidebar {
-    -fx-background-color: #ECEFF1;
-    -fx-border-color: #CFD8DC;
+    -fx-background-color: #2B2D30;
+    -fx-border-color: #323232;
     -fx-border-width: 0 1 0 0;
+    -fx-padding: 8 0;
 }
 
-.section-title {
+.sidebar-title {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 8 16 4 16;
+    -fx-text-transform: uppercase;
+}
+
+.nav-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #BBBBBB;
     -fx-font-size: 13px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #37474F;
+    -fx-padding: 8 16 8 20;
+    -fx-alignment: CENTER_LEFT;
+    -fx-cursor: hand;
+    -fx-background-radius: 0;
+    -fx-max-width: Infinity;
 }
 
-/* ===== 按钮 ===== */
-.btn-start {
-    -fx-background-color: #4CAF50;
-    -fx-text-fill: white;
+.nav-button:hover {
+    -fx-background-color: #3C3F41;
+}
+
+.nav-button-active {
+    -fx-background-color: #4E5254;
+    -fx-text-fill: #FFFFFF;
+}
+
+.sidebar-summary {
+    -fx-background-color: #35383A;
+    -fx-background-radius: 6;
+    -fx-padding: 12;
+    -fx-border-color: #3C3F41;
+    -fx-border-radius: 6;
+}
+
+.summary-title {
+    -fx-text-fill: #999999;
+    -fx-font-size: 11px;
+}
+
+.summary-value {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 22px;
     -fx-font-weight: bold;
 }
 
-.btn-stop {
-    -fx-background-color: #F44336;
-    -fx-text-fill: white;
+.summary-sub {
+    -fx-text-fill: #777777;
+    -fx-font-size: 11px;
+}
+
+.sidebar-divider {
+    -fx-background-color: #323232;
+    -fx-padding: 4 0;
+}
+
+/* ===== 中间时间线面板 ===== */
+.timeline-panel {
+    -fx-background-color: #2B2D30;
+    -fx-padding: 12;
+}
+
+.timeline-header {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 15px;
     -fx-font-weight: bold;
+    -fx-padding: 0 0 8 4;
+}
+
+.timeline-date {
+    -fx-text-fill: #666666;
+    -fx-font-size: 12px;
+    -fx-padding: 0 0 8 4;
+}
+
+.timeline-list {
+    -fx-background-color: #2B2D30;
+    -fx-padding: 0;
+}
+
+.timeline-list .scroll-bar {
+    -fx-background-color: #2B2D30;
+}
+
+.timeline-list .scroll-bar .thumb {
+    -fx-background-color: #555555;
+    -fx-background-radius: 3;
+}
+
+.timeline-list .scroll-bar .track {
+    -fx-background-color: transparent;
+}
+
+/* ===== 时间线卡片 ===== */
+.timeline-card {
+    -fx-background-color: #35383A;
+    -fx-background-radius: 8;
+    -fx-padding: 12 16;
+    -fx-cursor: hand;
+    -fx-border-color: #3C3F41;
+    -fx-border-radius: 8;
+}
+
+.timeline-card:hover {
+    -fx-background-color: #3C3F41;
+    -fx-border-color: #555555;
+}
+
+.timeline-card-selected {
+    -fx-background-color: #2D4F6E;
+    -fx-border-color: #4A90D9;
+}
+
+.card-time {
+    -fx-text-fill: #999999;
+    -fx-font-size: 11px;
+}
+
+.card-category {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-padding: 2 8;
+    -fx-background-radius: 4;
+}
+
+.card-category-code {
+    -fx-text-fill: #6AAB73;
+    -fx-background-color: #2D4F36;
+}
+
+.card-category-document {
+    -fx-text-fill: #6899DA;
+    -fx-background-color: #2D3F5E;
+}
+
+.card-category-image {
+    -fx-text-fill: #CC8A6E;
+    -fx-background-color: #4F382D;
+}
+
+.card-category-video {
+    -fx-text-fill: #B48EAD;
+    -fx-background-color: #3F2D4F;
+}
+
+.card-category-config {
+    -fx-text-fill: #CC9E75;
+    -fx-background-color: #4F442D;
+}
+
+.card-category-other {
+    -fx-text-fill: #999999;
+    -fx-background-color: #3C3F41;
+}
+
+.card-summary {
+    -fx-text-fill: #DDDDDD;
+    -fx-font-size: 13px;
+}
+
+.card-file-count {
+    -fx-text-fill: #777777;
+    -fx-font-size: 11px;
+}
+
+/* ===== 右侧详情面板 ===== */
+.detail-panel {
+    -fx-background-color: #2B2D30;
+    -fx-border-color: #323232;
+    -fx-border-width: 0 0 0 1;
+    -fx-padding: 12;
+}
+
+.detail-empty {
+    -fx-text-fill: #555555;
+    -fx-font-size: 13px;
+    -fx-alignment: CENTER;
+}
+
+.detail-header {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-padding: 0 0 4 0;
+}
+
+.detail-time {
+    -fx-text-fill: #999999;
+    -fx-font-size: 12px;
+    -fx-padding: 0 0 12 0;
+}
+
+.detail-section-title {
+    -fx-text-fill: #999999;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 8 0 4 0;
+}
+
+.detail-file-item {
+    -fx-background-color: #35383A;
+    -fx-background-radius: 4;
+    -fx-padding: 6 10;
+    -fx-border-color: #3C3F41;
+    -fx-border-radius: 4;
+}
+
+.detail-file-name {
+    -fx-text-fill: #DDDDDD;
+    -fx-font-size: 12px;
+}
+
+.detail-file-path {
+    -fx-text-fill: #666666;
+    -fx-font-size: 10px;
+}
+
+.detail-file-size {
+    -fx-text-fill: #777777;
+    -fx-font-size: 10px;
+}
+
+.detail-stat-card {
+    -fx-background-color: #35383A;
+    -fx-background-radius: 6;
+    -fx-padding: 10;
+    -fx-border-color: #3C3F41;
+    -fx-border-radius: 6;
+}
+
+.detail-stat-value {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+}
+
+.detail-stat-label {
+    -fx-text-fill: #777777;
+    -fx-font-size: 10px;
 }
 
 /* ===== 底部状态栏 ===== */
 .bottom-bar {
-    -fx-background-color: #ECEFF1;
-    -fx-border-color: #CFD8DC;
+    -fx-background-color: #3C3F41;
+    -fx-border-color: #323232;
     -fx-border-width: 1 0 0 0;
+    -fx-padding: 4 16;
+}
+
+.bottom-bar-label {
+    -fx-text-fill: #777777;
+    -fx-font-size: 11px;
 }

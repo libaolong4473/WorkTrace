@@ -19,7 +19,9 @@ module com.worktrace {
     exports com.worktrace.app;
     exports com.worktrace.model;
     exports com.worktrace.service;
+    exports com.worktrace.service.impl;
     exports com.worktrace.collector;
     exports com.worktrace.database;
+    exports com.worktrace.timeline;
     exports com.worktrace.util;
 }

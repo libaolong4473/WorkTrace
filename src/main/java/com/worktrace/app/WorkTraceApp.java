@@ -4,10 +4,13 @@ import com.worktrace.collector.CategoryClassifier;
 import com.worktrace.collector.EventAggregator;
 import com.worktrace.collector.FileWatcherService;
 import com.worktrace.collector.FileWatcherServiceImpl;
+import com.worktrace.database.ActivityRepository;
 import com.worktrace.database.DatabaseManager;
-import com.worktrace.database.dao.FileEventDao;
+import com.worktrace.database.FileEventRepository;
 import com.worktrace.database.migration.DatabaseMigration;
 import com.worktrace.model.FileEvent;
+import com.worktrace.service.TimelineService;
+import com.worktrace.service.impl.TimelineServiceImpl;
 import com.worktrace.ui.controller.MainController;
 import com.worktrace.util.Config;
 import com.worktrace.util.LogUtil;
@@ -27,17 +30,28 @@ import java.util.stream.Collectors;
 /**
  * WorkTrace 应用入口。
  *
+ * 完整事件流：
+ *   WatchService
+ *       → listener
+ *           → FileEventRepository.insert(event)      // 原始事件 → file_event 表
+ *           → EventAggregator.accept(event)           // 喂入聚合缓冲区
+ *               → 缓冲区满 → flush()
+ *                   → ActivityBlockGenerator.generate()
+ *                   → ActivityRepository.batchInsert() // 聚合结果 → activity_block 表
+ *
  * 启动流程：
  *   1. 初始化配置(Config)
  *   2. 初始化数据库(DatabaseManager + Migration)
- *   3. 初始化采集层(FileWatcherService + EventAggregator)
- *   4. 加载 FXML 主界面
- *   5. 注入依赖到 Controller
- *   6. 显示窗口
+ *   3. 初始化持久化层(FileEventRepository + ActivityRepository)
+ *   4. 初始化采集层(EventAggregator + FileWatcherService)
+ *   5. 加载 FXML 主界面
+ *   6. 注入依赖到 Controller
+ *   7. 显示窗口
  */
 public class WorkTraceApp extends Application {
 
     private FileWatcherService watcherService;
+    private EventAggregator aggregator;
 
     @Override
     public void start(Stage primaryStage) throws Exception {
@@ -52,14 +66,29 @@ public class WorkTraceApp extends Application {
         new DatabaseMigration().migrate();
         LogUtil.info("数据库初始化完成");
 
-        // 3. 采集层
+        // 3. 持久化层
+        FileEventRepository fileEventRepo     = new FileEventRepository();
+        ActivityRepository activityRepo        = new ActivityRepository();
+
+        // 4. 采集层 — 完整事件流接线
         CategoryClassifier classifier = new CategoryClassifier();
-        EventAggregator aggregator     = new EventAggregator(classifier);
-        FileEventDao fileEventDao      = new FileEventDao();
+
+        // EventAggregator：聚合完成后自动写入 activity_block 表
+        aggregator = new EventAggregator(
+            classifier,
+            blocks -> {
+                try {
+                    activityRepo.batchInsert(blocks);
+                    LogUtil.info("已持久化 " + blocks.size() + " 个活动块到 activity_block");
+                } catch (Exception e) {
+                    LogUtil.error("活动块持久化失败: " + e.getMessage());
+                }
+            }
+        );
 
         watcherService = new FileWatcherServiceImpl();
 
-        // 注册事件回调：FileEvent → 保存到 SQLite
+        // 监听回调：双写 — 原始事件 + 聚合器
         watcherService.addEventListener((eventType, filePath, size) -> {
             FileEvent event = new FileEvent();
             event.setEventType(eventType);
@@ -68,11 +97,16 @@ public class WorkTraceApp extends Application {
             event.setExtension(extractExtension(filePath));
             event.setSize(size);
             event.setEventTime(LocalDateTime.now());
+
+            // 1) 原始事件写入 file_event 表
             try {
-                fileEventDao.insert(event);
+                fileEventRepo.insert(event);
             } catch (Exception e) {
                 LogUtil.error("保存文件事件失败: " + e.getMessage());
             }
+
+            // 2) 喂入聚合器(缓冲区满时自动触发聚合 + 持久化)
+            aggregator.accept(event);
         });
 
         // 从配置读取监听目录并启动
@@ -81,18 +115,21 @@ public class WorkTraceApp extends Application {
         watcherService.start();
         LogUtil.info("已注册监听目录: " + watchDirs);
 
-        // 4. 加载 FXML
+        // 5. 业务服务层
+        TimelineService timelineService = new TimelineServiceImpl(activityRepo);
+
+        // 6. 加载 FXML
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/main.fxml"));
         Parent root = loader.load();
 
-        // 5. 注入依赖
+        // 7. 注入依赖
         MainController controller = loader.getController();
         controller.setWatcherService(watcherService);
-        // controller.setTimelineService(...);    // TODO: 后续注入
-        // controller.setProjectService(...);
-        // controller.setStatisticsService(...);
+        controller.setTimelineService(timelineService);
+        controller.setFileEventRepository(fileEventRepo);
+        controller.setOnStopCallback(this::stopWatching);
 
-        // 6. 显示窗口
+        // 8. 显示窗口
         Scene scene = new Scene(root, 960, 640);
         primaryStage.setTitle("WorkTrace - 个人工作轨迹");
         primaryStage.setScene(scene);
@@ -103,11 +140,24 @@ public class WorkTraceApp extends Application {
 
     @Override
     public void stop() throws Exception {
+        stopWatching();
+        DatabaseManager.getInstance().close();
+        LogUtil.info("WorkTrace 已退出");
+    }
+
+    /**
+     * 停止监听并刷新聚合器。
+     * 由 MainController 的"停止监听"按钮调用。
+     * 顺序：先停 WatchService → 再 flush 缓冲区 → 事件不丢失。
+     */
+    public void stopWatching() {
         if (watcherService != null) {
             watcherService.stop();
         }
-        DatabaseManager.getInstance().close();
-        LogUtil.info("WorkTrace 已退出");
+        if (aggregator != null) {
+            aggregator.flush();
+            LogUtil.info("聚合器缓冲区已刷新");
+        }
     }
 
     /**

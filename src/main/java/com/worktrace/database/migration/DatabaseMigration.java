@@ -36,8 +36,9 @@ public class DatabaseMigration {
         if (current < 1) {
             migrateToV1();
         }
-        // 后续版本在此追加：
-        // if (current < 2) { migrateToV2(); }
+        if (current < 2) {
+            migrateToV2();
+        }
     }
 
     private void ensureVersionTable() throws SQLException {
@@ -62,6 +63,20 @@ public class DatabaseMigration {
         // V1: 初始 Schema 已由 schema.sql 建表完成，此处仅记录版本号
         try (var ps = conn.prepareStatement(
                 "INSERT OR IGNORE INTO schema_version(version) VALUES(1)")) {
+            ps.executeUpdate();
+        }
+    }
+
+    private void migrateToV2() throws SQLException {
+        // V2: activity_block 增加去重索引 (start_time, end_time, category)
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_activity_block_dedup
+                    ON activity_block(start_time, end_time, category)
+                """);
+        }
+        try (var ps = conn.prepareStatement(
+                "INSERT OR IGNORE INTO schema_version(version) VALUES(2)")) {
             ps.executeUpdate();
         }
     }

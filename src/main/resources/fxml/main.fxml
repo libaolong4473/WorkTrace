@@ -6,55 +6,131 @@
 
 <BorderPane xmlns:fx="http://javafx.com/fxml"
             fx:controller="com.worktrace.ui.controller.MainController"
-            prefWidth="960" prefHeight="640"
+            prefWidth="1100" prefHeight="680"
             stylesheets="@../css/style.css">
 
-    <!-- ==================== TOP: 监听状态栏 ==================== -->
+    <!-- ==================== TOP: 状态栏 ==================== -->
     <top>
-        <HBox styleClass="top-bar" spacing="12" alignment="CENTER_LEFT">
-            <padding><Insets top="8" right="16" bottom="8" left="16"/></padding>
-            <Label fx:id="lblWatchStatus" text="○ 已停止" styleClass="status-label"/>
-            <Separator orientation="VERTICAL" prefHeight="16"/>
-            <Label fx:id="lblWatchedDirs" text="监听目录：未配置"/>
+        <HBox styleClass="top-bar" spacing="10" alignment="CENTER_LEFT">
+            <padding><Insets top="6" right="16" bottom="6" left="16"/></padding>
+            <Label fx:id="lblWatchStatus" text="○ 已停止" styleClass="status-indicator status-stopped"/>
+            <Separator orientation="VERTICAL" prefHeight="14" styleClass="top-bar-separator"/>
+            <Label fx:id="lblWatchedDirs" text="监听目录: 未配置" styleClass="top-bar-label"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="lblEventCount" text="今日事件: 0" styleClass="top-bar-label"/>
         </HBox>
     </top>
 
     <!-- ==================== LEFT: 侧边栏 ==================== -->
     <left>
-        <VBox fx:id="sidebarBox" prefWidth="220" styleClass="sidebar" spacing="8">
-            <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
-            <!-- 今日概览 -->
-            <Label text="📊 今日概览" styleClass="section-title"/>
-            <Label fx:id="lblTodaySummary" text="加载中..."/>
+        <VBox styleClass="sidebar" prefWidth="200" spacing="4">
+            <padding><Insets top="8" bottom="8"/></padding>
 
-            <Separator/>
+            <Label text="工作轨迹" styleClass="sidebar-title"/>
 
-            <!-- 导航树 -->
-            <Label text="📁 导航" styleClass="section-title"/>
-            <TreeView fx:id="navTree" VBox.vgrow="ALWAYS"/>
+            <!-- 今日概览卡片 -->
+            <VBox styleClass="sidebar-summary" spacing="6">
+                <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
+                <Label text="今日活动" styleClass="summary-title"/>
+                <HBox spacing="12" alignment="CENTER_LEFT">
+                    <VBox>
+                        <Label fx:id="lblBlockCount" text="0" styleClass="summary-value"/>
+                        <Label text="活动块" styleClass="summary-sub"/>
+                    </VBox>
+                    <VBox>
+                        <Label fx:id="lblActiveMinutes" text="0" styleClass="summary-value"/>
+                        <Label text="分钟" styleClass="summary-sub"/>
+                    </VBox>
+                </HBox>
+                <Separator styleClass="sidebar-divider" maxWidth="Infinity"/>
+                <Label text="类别分布" styleClass="summary-title"/>
+                <HBox spacing="6" alignment="CENTER_LEFT">
+                    <Label text="🟢 代码" styleClass="summary-sub"/>
+                    <Label fx:id="lblCatCode" text="0 分钟" styleClass="summary-sub"/>
+                </HBox>
+                <HBox spacing="6" alignment="CENTER_LEFT">
+                    <Label text="🔵 文档" styleClass="summary-sub"/>
+                    <Label fx:id="lblCatDocument" text="0 分钟" styleClass="summary-sub"/>
+                </HBox>
+                <HBox spacing="6" alignment="CENTER_LEFT">
+                    <Label text="🟠 图片" styleClass="summary-sub"/>
+                    <Label fx:id="lblCatImage" text="0 分钟" styleClass="summary-sub"/>
+                </HBox>
+                <HBox spacing="6" alignment="CENTER_LEFT">
+                    <Label text="🟣 音视频" styleClass="summary-sub"/>
+                    <Label fx:id="lblCatVideo" text="0 分钟" styleClass="summary-sub"/>
+                </HBox>
+                <HBox spacing="6" alignment="CENTER_LEFT">
+                    <Label text="🟡 配置" styleClass="summary-sub"/>
+                    <Label fx:id="lblCatConfig" text="0 分钟" styleClass="summary-sub"/>
+                </HBox>
+            </VBox>
 
-            <Separator/>
+            <Region VBox.vgrow="ALWAYS"/>
 
-            <!-- 监听控制按钮 -->
-            <Button text="▶ 开始监听" styleClass="btn-start" maxWidth="Infinity"/>
-            <Button text="■ 停止监听" styleClass="btn-stop"  maxWidth="Infinity"/>
+            <!-- 导航按钮 -->
+            <Label text="导航" styleClass="sidebar-title"/>
+
+            <Button fx:id="btnOverview"  text="📊  今日概览" styleClass="nav-button nav-button-active" maxWidth="Infinity"/>
+            <Button fx:id="btnTimeline"  text="📋  时间线"   styleClass="nav-button" maxWidth="Infinity"/>
+            <Button fx:id="btnProjects"  text="📁  项目统计" styleClass="nav-button" maxWidth="Infinity"/>
+
+            <Region VBox.vgrow="ALWAYS"/>
+
+            <!-- 监听控制 -->
+            <Separator styleClass="sidebar-divider" maxWidth="Infinity"/>
+            <Button fx:id="btnToggleWatch" text="▶  开始监听" styleClass="nav-button" maxWidth="Infinity"/>
         </VBox>
     </left>
 
-    <!-- ==================== CENTER: 活动列表 ==================== -->
+    <!-- ==================== CENTER: 时间线 ==================== -->
     <center>
-        <VBox spacing="8">
+        <VBox fx:id="timelinePanel" styleClass="timeline-panel" spacing="8">
             <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
-            <Label text="📋 活动列表" styleClass="section-title"/>
-            <ListView fx:id="activityList" VBox.vgrow="ALWAYS"/>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="lblTimelineTitle" text="今日时间线" styleClass="timeline-header"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="lblTimelineDate" styleClass="timeline-date"/>
+            </HBox>
+
+            <ListView fx:id="timelineList" styleClass="timeline-list" VBox.vgrow="ALWAYS"/>
         </VBox>
     </center>
+
+    <!-- ==================== RIGHT: 详情面板 ==================== -->
+    <right>
+        <VBox fx:id="detailPanel" styleClass="detail-panel" prefWidth="280" spacing="8">
+            <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
+
+            <Label fx:id="lblDetailTitle" text="活动详情" styleClass="detail-header"/>
+
+            <Label fx:id="lblDetailTime" text="选择一个活动块查看详情" styleClass="detail-time"/>
+
+            <!-- 统计卡片区域 -->
+            <HBox fx:id="detailStatsBox" spacing="8">
+                <VBox styleClass="detail-stat-card" alignment="CENTER" spacing="2" HBox.hgrow="ALWAYS">
+                    <Label fx:id="lblDetailDuration" text="0" styleClass="detail-stat-value"/>
+                    <Label text="分钟" styleClass="detail-stat-label"/>
+                </VBox>
+                <VBox styleClass="detail-stat-card" alignment="CENTER" spacing="2" HBox.hgrow="ALWAYS">
+                    <Label fx:id="lblDetailFiles" text="0" styleClass="detail-stat-value"/>
+                    <Label text="文件" styleClass="detail-stat-label"/>
+                </VBox>
+            </HBox>
+
+            <Separator styleClass="sidebar-divider" maxWidth="Infinity"/>
+
+            <Label text="涉及文件" styleClass="detail-section-title"/>
+
+            <ListView fx:id="detailFileList" VBox.vgrow="ALWAYS" styleClass="timeline-list"/>
+        </VBox>
+    </right>
 
     <!-- ==================== BOTTOM: 状态栏 ==================== -->
     <bottom>
         <HBox styleClass="bottom-bar" alignment="CENTER_RIGHT">
-            <padding><Insets top="4" right="16" bottom="4" left="16"/></padding>
-            <Label fx:id="lblEventCount" text="事件数：0"/>
+            <Label fx:id="lblStatusText" text="就绪" styleClass="bottom-bar-label"/>
         </HBox>
     </bottom>
 
