@@ -3,8 +3,11 @@ package com.worktrace.app;
 import com.worktrace.collector.CategoryClassifier;
 import com.worktrace.collector.EventAggregator;
 import com.worktrace.collector.FileWatcherService;
+import com.worktrace.collector.FileWatcherServiceImpl;
 import com.worktrace.database.DatabaseManager;
+import com.worktrace.database.dao.FileEventDao;
 import com.worktrace.database.migration.DatabaseMigration;
+import com.worktrace.model.FileEvent;
 import com.worktrace.ui.controller.MainController;
 import com.worktrace.util.Config;
 import com.worktrace.util.LogUtil;
@@ -14,6 +17,12 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
+
+import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * WorkTrace 应用入口。
@@ -46,7 +55,31 @@ public class WorkTraceApp extends Application {
         // 3. 采集层
         CategoryClassifier classifier = new CategoryClassifier();
         EventAggregator aggregator     = new EventAggregator(classifier);
-        // watcherService = new FileWatcherServiceImpl();  // TODO: 第二阶段实现
+        FileEventDao fileEventDao      = new FileEventDao();
+
+        watcherService = new FileWatcherServiceImpl();
+
+        // 注册事件回调：FileEvent → 保存到 SQLite
+        watcherService.addEventListener((eventType, filePath, size) -> {
+            FileEvent event = new FileEvent();
+            event.setEventType(eventType);
+            event.setPath(filePath.toAbsolutePath().toString());
+            event.setFileName(filePath.getFileName().toString());
+            event.setExtension(extractExtension(filePath));
+            event.setSize(size);
+            event.setEventTime(LocalDateTime.now());
+            try {
+                fileEventDao.insert(event);
+            } catch (Exception e) {
+                LogUtil.error("保存文件事件失败: " + e.getMessage());
+            }
+        });
+
+        // 从配置读取监听目录并启动
+        List<Path> watchDirs = parseWatchDirs(config.getString("watch.dirs"));
+        watcherService.watchDirectories(watchDirs);
+        watcherService.start();
+        LogUtil.info("已注册监听目录: " + watchDirs);
 
         // 4. 加载 FXML
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/main.fxml"));
@@ -54,8 +87,8 @@ public class WorkTraceApp extends Application {
 
         // 5. 注入依赖
         MainController controller = loader.getController();
-        // controller.setWatcherService(watcherService);   // TODO: 第二阶段注入
-        // controller.setTimelineService(...);
+        controller.setWatcherService(watcherService);
+        // controller.setTimelineService(...);    // TODO: 后续注入
         // controller.setProjectService(...);
         // controller.setStatisticsService(...);
 
@@ -75,6 +108,29 @@ public class WorkTraceApp extends Application {
         }
         DatabaseManager.getInstance().close();
         LogUtil.info("WorkTrace 已退出");
+    }
+
+    /**
+     * 解析配置中的监听目录列表(分号分隔)。
+     */
+    private List<Path> parseWatchDirs(String dirs) {
+        if (dirs == null || dirs.isBlank()) {
+            return List.of(Path.of(System.getProperty("user.home"), "Desktop"));
+        }
+        return Arrays.stream(dirs.split(";"))
+                     .map(String::trim)
+                     .filter(s -> !s.isEmpty())
+                     .map(Path::of)
+                     .collect(Collectors.toList());
+    }
+
+    /**
+     * 提取文件扩展名(不含点)，无扩展名返回空字符串。
+     */
+    private String extractExtension(Path filePath) {
+        String name = filePath.getFileName().toString();
+        int dot = name.lastIndexOf('.');
+        return (dot > 0 && dot < name.length() - 1) ? name.substring(dot + 1) : "";
     }
 
     public static void main(String[] args) {

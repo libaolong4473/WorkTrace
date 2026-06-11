@@ -36,7 +36,8 @@ public class Config {
 
     private void load() {
         // 加载默认值
-        props.setProperty("watch.dirs",           System.getProperty("user.home") + "\\Desktop");
+        props.setProperty("watch.dirs",           System.getProperty("user.home") + "\\Desktop;" +
+                                                  System.getProperty("user.home") + "\\Documents");
         props.setProperty("aggregate.gap.minutes", "5");
         props.setProperty("db.path",              CONFIG_DIR.resolve("worktrace.db").toString());
 

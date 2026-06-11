@@ -24,8 +24,11 @@ public interface FileWatcherService {
     /** 停止监听线程。 */
     void stop();
 
-    /** 添加一个监听目录。 */
+    /** 添加一个监听目录(自动递归注册子目录)。 */
     void watchDirectory(Path dir);
+
+    /** 批量添加监听目录。 */
+    void watchDirectories(List<Path> dirs);
 
     /** 移除一个监听目录。 */
     void unwatchDirectory(Path dir);

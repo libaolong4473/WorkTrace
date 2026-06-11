@@ -88,7 +88,19 @@ public class MainController implements Initializable {
 
     // ---------- 依赖注入 ----------
 
-    public void setWatcherService(FileWatcherService service)    { this.watcherService = service; }
+    public void setWatcherService(FileWatcherService service) {
+        this.watcherService = service;
+        if (service != null) {
+            updateWatchStatus(service.isRunning());
+            if (lblWatchedDirs != null) {
+                String dirs = service.getWatchedDirectories().stream()
+                    .map(p -> p.getFileName().toString())
+                    .reduce((a, b) -> a + ", " + b)
+                    .orElse("未配置");
+                lblWatchedDirs.setText("监听目录: " + dirs);
+            }
+        }
+    }
     public void setTimelineService(TimelineService service)      { this.timelineService = service; }
     public void setProjectService(ProjectService service)        { this.projectService = service; }
     public void setStatisticsService(StatisticsService service)  { this.statisticsService = service; }
