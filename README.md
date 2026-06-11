@@ -1,87 +1,182 @@
-# WorkTrace — 个人工作轨迹记录工具
+# WorkTrace
 
-## 产品定位
+A desktop activity timeline tool that transforms file system events into clear, human-readable work history, helping users understand what they created, modified, and worked on each day.
 
-WorkTrace 不是文件搜索工具，而是**个人工作轨迹记录工具**。
-自动记录 Windows 电脑中的文件变化行为，并将大量文件事件聚合成用户可理解的工作时间线。
+## What It Does
 
-## 技术栈
-
-| 层次     | 技术选型                |
-|----------|-------------------------|
-| 语言     | Java 21 (JPMS)          |
-| UI       | JavaFX 21 + FXML        |
-| 数据库   | SQLite (WAL 模式)       |
-| 构建     | Maven                   |
-| 架构模式 | MVC + 事件驱动          |
-
-## 项目目录树
+WorkTrace silently watches your files in the background. When you edit code, update documents, or change configs, it aggregates thousands of raw file events into meaningful activity blocks:
 
 ```
-WorkTrace/
-├── pom.xml                                         ← Maven 构建配置
-├── README.md
-└── src/
-    └── main/
-        ├── java/
-        │   ├── module-info.java                    ← JPMS 模块声明
-        │   └── com/worktrace/
-        │       ├── app/
-        │       │   └── WorkTraceApp.java           ← 应用入口，启动流程编排
-        │       ├── collector/
-        │       │   ├── FileWatcherService.java      ← 文件监视服务接口
-        │       │   ├── EventAggregator.java         ← 事件聚合器
-        │       │   └── CategoryClassifier.java      ← 活动类别分类器
-        │       ├── database/
-        │       │   ├── DatabaseManager.java         ← 数据库连接管理(单例)
-        │       │   ├── dao/
-        │       │   │   ├── FileEventDao.java        ← 文件事件 DAO
-        │       │   │   ├── ActivityBlockDao.java    ← 活动块 DAO
-        │       │   │   └── ProjectInfoDao.java      ← 项目信息 DAO
-        │       │   └── migration/
-        │       │       └── DatabaseMigration.java   ← 数据库版本迁移
-        │       ├── model/
-        │       │   ├── FileEvent.java               ← 文件事件实体
-        │       │   ├── ActivityBlock.java           ← 活动块实体
-        │       │   └── ProjectInfo.java             ← 项目信息实体
-        │       ├── service/
-        │       │   ├── TimelineService.java         ← 时间线服务接口
-        │       │   ├── ProjectService.java          ← 项目服务接口
-        │       │   └── StatisticsService.java       ← 统计服务接口
-        │       ├── timeline/                        ← (预留) 时间线渲染策略
-        │       ├── ui/
-        │       │   ├── controller/
-        │       │   │   └── MainController.java      ← 主界面控制器
-        │       │   └── view/
-        │       │       └── TimelineView.java        ← 时间线自定义视图
-        │       └── util/
-        │           ├── Config.java                  ← 配置管理器
-        │           └── LogUtil.java                 ← 日志工具
-        └── resources/
-            ├── fxml/
-            │   └── main.fxml                        ← 主界面布局
-            ├── css/
-            │   └── style.css                        ← 主题样式
-            └── sql/
-                └── schema.sql                       ← 数据库 DDL
+09:01 - 09:35  │  Code Development  ·  WorkTraceApp.java +5 files
+10:05 - 10:20  │  Document Editing  ·  README.md
+10:30 - 10:50  │  Config Changes    ·  pom.xml +3 files
 ```
 
-## 启动方式
+Instead of seeing 47 individual file saves, you see 3 work sessions.
+
+## Features
+
+- **Automatic file monitoring** — recursive directory watching via NIO WatchService
+- **Smart event aggregation** — groups related file events into activity blocks (15-min default window)
+- **Category classification** — 40+ file extensions mapped to CODE / DOCUMENT / IMAGE / VIDEO / CONFIG
+- **Project-aware grouping** — same-project files merge together regardless of type
+- **SQLite persistence** — all events and activity blocks stored locally with WAL mode
+- **Dark theme UI** — IntelliJ IDEA-style interface with timeline, detail panel, and category stats
+- **Real-time refresh** — UI auto-updates every 30 seconds while monitoring is active
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Language | Java 21 (JPMS modules) |
+| UI | JavaFX 21 + FXML |
+| Database | SQLite (WAL mode) |
+| Build | Maven |
+| Architecture | MVC + Event-Driven |
+
+## Getting Started
+
+### Prerequisites
+
+- JDK 21+
+- Maven 3.6+
+
+### Build and Run
 
 ```bash
-# 编译
-mvn clean compile
-
-# 运行
-mvn javafx:run
+git clone https://github.com/libaolong4473/WorkTrace.git
+cd WorkTrace
+mvn clean javafx:run
 ```
 
-## 第一阶段范围
+> If Maven uses a different JDK, set `JAVA_HOME` first:
+> ```bash
+> set JAVA_HOME=C:\Program Files\Java\jdk-21.0.11
+> mvn clean javafx:run
+> ```
 
-仅实现基础框架骨架，不包含业务逻辑。
+### Configuration
 
-## 后续扩展路线
+Edit `~/.worktrace/config.properties`:
 
-- 第二阶段：实现 FileWatcherService + EventAggregator 核心采集逻辑
-- 第三阶段：实现时间线渲染 + 统计面板
-- 第四阶段：接入 AI 日报生成
+```properties
+# Directories to watch (semicolon-separated)
+watch.dirs=C:\Users\you\Desktop;C:\Users\you\Documents;D:\projects
+
+# Aggregation time window in minutes
+aggregate.gap.minutes=15
+```
+
+Restart the app after changes.
+
+### Usage
+
+1. Launch the app
+2. Click **Start Monitoring** in the left sidebar
+3. Work normally — edit files, write code, update docs
+4. Click **Stop Monitoring** to see aggregated activity blocks
+5. Click any block to view the files involved
+
+## Project Structure
+
+```
+src/main/java/com/worktrace/
+├── app/                    # Application entry point
+│   └── WorkTraceApp.java
+├── collector/              # File event collection layer
+│   ├── FileWatcherService      # WatchService interface
+│   ├── FileWatcherServiceImpl  # Recursive directory monitoring
+│   ├── EventAggregator         # Buffered event → ActivityBlock pipeline
+│   └── CategoryClassifier      # Extension → category mapping
+├── database/               # Persistence layer
+│   ├── DatabaseManager         # SQLite connection singleton
+│   ├── FileEventRepository     # file_event table CRUD
+│   ├── ActivityRepository      # activity_block table CRUD
+│   ├── ProjectRepository       # project_info table CRUD
+│   ├── PageResult              # Pagination wrapper
+│   └── migration/              # Schema versioning
+├── model/                  # Entity classes
+│   ├── FileEvent
+│   ├── ActivityBlock
+│   └── ProjectInfo
+├── service/                # Business logic interfaces
+│   ├── TimelineService
+│   ├── ProjectService
+│   ├── StatisticsService
+│   └── impl/
+│       └── TimelineServiceImpl
+├── timeline/               # Aggregation engine
+│   ├── ActivityBlockGenerator  # Core algorithm (single-pass scan)
+│   ├── AggregationContext      # Sliding window state machine
+│   └── MergeConfig             # Aggregation parameters
+├── ui/                     # JavaFX presentation layer
+│   ├── controller/MainController
+│   └── view/
+│       ├── ActivityBlockCell   # Timeline card cell
+│       └── FileDetailCell      # File list cell
+└── util/                   # Utilities
+    ├── Config
+    └── LogUtil
+```
+
+## Data Flow
+
+```
+Windows File System
+       │
+       ▼
+  NIO WatchService (single daemon thread)
+       │
+       ▼
+  FileWatcherServiceImpl
+       │
+       ├──→ FileEventRepository.insert()     → SQLite (file_event)
+       │
+       └──→ EventAggregator.accept()
+               │ buffer (100 events)
+               ▼
+            flush()
+               │
+               ▼
+            ActivityBlockGenerator.generate()
+               │
+               ▼
+            ActivityRepository.batchInsert()  → SQLite (activity_block)
+               │
+               ▼
+            TimelineService.getDailyTimeline()
+               │
+               ▼
+            MainController.loadAllData()      → JavaFX UI
+```
+
+## Database
+
+Three tables, stored at `~/.worktrace/worktrace.db`:
+
+| Table | Purpose |
+|-------|---------|
+| `file_event` | Raw file system events (CREATE / MODIFY / DELETE) |
+| `activity_block` | Aggregated work sessions with time range and category |
+| `project_info` | Registered project root paths |
+
+Deduplication: `UNIQUE(start_time, end_time, category)` prevents duplicate activity blocks.
+
+## Roadmap
+
+- [x] File monitoring with recursive directory watching
+- [x] Event aggregation engine (time-window + project + category merging)
+- [x] SQLite persistence with batch insert and pagination
+- [x] Dark theme UI with real-time data
+- [x] 30-second auto-refresh during monitoring
+- [ ] Event debouncing (merge rapid MODIFY events)
+- [ ] Async write queue (decouple WatchService from DB writes)
+- [ ] Project auto-detection (.git / pom.xml / package.json)
+- [ ] Date picker for historical timeline browsing
+- [ ] Project statistics view
+- [ ] System tray background mode
+- [ ] AI-powered daily work report generation
+
+## License
+
+MIT
