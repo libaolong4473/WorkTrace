@@ -79,6 +79,7 @@
                 <version>0.0.8</version>
                 <configuration>
                     <mainClass>${main.class}</mainClass>
+                    <executable>${java.home}/bin/java</executable>
                 </configuration>
             </plugin>
         </plugins>

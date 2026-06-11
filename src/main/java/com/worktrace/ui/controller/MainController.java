@@ -40,6 +40,9 @@ public class MainController implements Initializable {
     // ---------- 右侧主区域 ----------
     @FXML private ListView<String> activityList;
 
+    // ---------- 底部状态栏 ----------
+    @FXML private Label lblEventCount;
+
     // ---------- 服务依赖(由 App 注入) ----------
     private FileWatcherService watcherService;
     private TimelineService timelineService;

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
@@ -10,8 +11,8 @@
 
     <!-- ==================== TOP: 监听状态栏 ==================== -->
     <top>
-        <HBox styleClass="top-bar" spacing="12" alignment="CENTER_LEFT"
-              padding="8 16">
+        <HBox styleClass="top-bar" spacing="12" alignment="CENTER_LEFT">
+            <padding><Insets top="8" right="16" bottom="8" left="16"/></padding>
             <Label fx:id="lblWatchStatus" text="○ 已停止" styleClass="status-label"/>
             <Separator orientation="VERTICAL" prefHeight="16"/>
             <Label fx:id="lblWatchedDirs" text="监听目录：未配置"/>
@@ -20,8 +21,8 @@
 
     <!-- ==================== LEFT: 侧边栏 ==================== -->
     <left>
-        <VBox fx:id="sidebarBox" prefWidth="220" styleClass="sidebar" spacing="8"
-              padding="12">
+        <VBox fx:id="sidebarBox" prefWidth="220" styleClass="sidebar" spacing="8">
+            <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
             <!-- 今日概览 -->
             <Label text="📊 今日概览" styleClass="section-title"/>
             <Label fx:id="lblTodaySummary" text="加载中..."/>
@@ -42,7 +43,8 @@
 
     <!-- ==================== CENTER: 活动列表 ==================== -->
     <center>
-        <VBox spacing="8" padding="12">
+        <VBox spacing="8">
+            <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
             <Label text="📋 活动列表" styleClass="section-title"/>
             <ListView fx:id="activityList" VBox.vgrow="ALWAYS"/>
         </VBox>
@@ -50,7 +52,8 @@
 
     <!-- ==================== BOTTOM: 状态栏 ==================== -->
     <bottom>
-        <HBox styleClass="bottom-bar" alignment="CENTER_RIGHT" padding="4 16">
+        <HBox styleClass="bottom-bar" alignment="CENTER_RIGHT">
+            <padding><Insets top="4" right="16" bottom="4" left="16"/></padding>
             <Label fx:id="lblEventCount" text="事件数：0"/>
         </HBox>
     </bottom>
