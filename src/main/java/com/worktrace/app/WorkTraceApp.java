@@ -4,14 +4,19 @@ import com.worktrace.collector.CategoryClassifier;
 import com.worktrace.collector.EventAggregator;
 import com.worktrace.collector.FileWatcherService;
 import com.worktrace.collector.FileWatcherServiceImpl;
+import com.worktrace.collector.ProjectDetector;
 import com.worktrace.database.ActivityRepository;
 import com.worktrace.database.DatabaseManager;
 import com.worktrace.database.FileEventRepository;
 import com.worktrace.database.ProjectRepository;
+import com.worktrace.database.WorkSessionRepository;
 import com.worktrace.database.migration.DatabaseMigration;
 import com.worktrace.model.FileEvent;
+import com.worktrace.service.DataRetentionService;
 import com.worktrace.service.TimelineService;
+import com.worktrace.service.WorkSessionService;
 import com.worktrace.service.impl.TimelineServiceImpl;
+import com.worktrace.service.impl.WorkSessionServiceImpl;
 import com.worktrace.ui.controller.MainController;
 import com.worktrace.util.Config;
 import com.worktrace.util.LogUtil;
@@ -67,17 +72,23 @@ public class WorkTraceApp extends Application {
         new DatabaseMigration().migrate();
         LogUtil.info("数据库初始化完成");
 
+        // 2.5 数据生命周期管理（清理过期数据）
+        new DataRetentionService().cleanup();
+
         // 3. 持久化层
         FileEventRepository fileEventRepo     = new FileEventRepository();
         ActivityRepository activityRepo        = new ActivityRepository();
         ProjectRepository projectRepo          = new ProjectRepository();
+        WorkSessionRepository workSessionRepo  = new WorkSessionRepository();
 
         // 4. 采集层 — 完整事件流接线
         CategoryClassifier classifier = new CategoryClassifier();
+        ProjectDetector projectDetector = new ProjectDetector(projectRepo);
 
         // EventAggregator：聚合完成后自动写入 activity_block 表
         aggregator = new EventAggregator(
             classifier,
+            projectDetector,
             blocks -> {
                 try {
                     activityRepo.batchInsert(blocks);
@@ -111,6 +122,7 @@ public class WorkTraceApp extends Application {
 
         // 5. 业务服务层
         TimelineService timelineService = new TimelineServiceImpl(activityRepo);
+        WorkSessionService workSessionService = new WorkSessionServiceImpl(activityRepo, workSessionRepo);
 
         // 6. 加载 FXML
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/main.fxml"));
@@ -119,8 +131,10 @@ public class WorkTraceApp extends Application {
         // 7. 注入依赖
         MainController controller = loader.getController();
         controller.setWatcherService(watcherService);
+        controller.setWorkSessionService(workSessionService);
         controller.setTimelineService(timelineService);
         controller.setFileEventRepository(fileEventRepo);
+        controller.setActivityRepository(activityRepo);
         controller.setProjectRepository(projectRepo);
         controller.setOnStopCallback(this::stopWatching);
 

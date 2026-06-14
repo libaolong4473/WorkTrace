@@ -1,6 +1,7 @@
 package com.worktrace.timeline;
 
 import com.worktrace.collector.CategoryClassifier;
+import com.worktrace.collector.ProjectDetector;
 import com.worktrace.model.ActivityBlock;
 import com.worktrace.model.FileEvent;
 import com.worktrace.util.LogUtil;
@@ -53,20 +54,30 @@ public class ActivityBlockGenerator {
 
     private final CategoryClassifier classifier;
     private final MergeConfig config;
+    private final ProjectDetector projectDetector;
 
     public ActivityBlockGenerator() {
-        this.classifier = new CategoryClassifier();
-        this.config     = MergeConfig.DEFAULT;
+        this.classifier      = new CategoryClassifier();
+        this.config          = MergeConfig.DEFAULT;
+        this.projectDetector = null;
     }
 
     public ActivityBlockGenerator(MergeConfig config) {
-        this.classifier = new CategoryClassifier();
-        this.config     = config;
+        this.classifier      = new CategoryClassifier();
+        this.config          = config;
+        this.projectDetector = null;
     }
 
     public ActivityBlockGenerator(CategoryClassifier classifier, MergeConfig config) {
-        this.classifier = classifier;
-        this.config     = config;
+        this.classifier      = classifier;
+        this.config          = config;
+        this.projectDetector = null;
+    }
+
+    public ActivityBlockGenerator(CategoryClassifier classifier, MergeConfig config, ProjectDetector projectDetector) {
+        this.classifier      = classifier;
+        this.config          = config;
+        this.projectDetector = projectDetector;
     }
 
     /**
@@ -95,12 +106,12 @@ public class ActivityBlockGenerator {
 
         for (FileEvent event : sorted) {
             if (ctx == null) {
-                ctx = new AggregationContext(classifier, event);
+                ctx = new AggregationContext(classifier, projectDetector, event);
             } else if (ctx.shouldMerge(event, config)) {
                 ctx.add(event);
             } else {
                 allBlocks.add(ctx.toActivityBlock());
-                ctx = new AggregationContext(classifier, event);
+                ctx = new AggregationContext(classifier, projectDetector, event);
             }
         }
         if (ctx != null) {

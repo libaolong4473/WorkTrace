@@ -1,8 +1,10 @@
 package com.worktrace.timeline;
 
 import com.worktrace.collector.CategoryClassifier;
+import com.worktrace.collector.ProjectDetector;
 import com.worktrace.model.ActivityBlock;
 import com.worktrace.model.FileEvent;
+import com.worktrace.model.ProjectInfo;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -28,13 +30,21 @@ public class AggregationContext {
     private final List<FileEntry> files = new ArrayList<>();
     private final Map<String, Integer> categoryCounts = new HashMap<>();
     private final Set<String> projectPaths = new LinkedHashSet<>();
+    /** 路径 → 项目名称 映射 */
+    private final Map<String, String> pathToProjectName = new HashMap<>();
 
     private final CategoryClassifier classifier;
+    private final ProjectDetector projectDetector;
 
     public AggregationContext(CategoryClassifier classifier, FileEvent firstEvent) {
-        this.classifier  = classifier;
-        this.startTime    = firstEvent.getEventTime();
-        this.endTime      = firstEvent.getEventTime();
+        this(classifier, null, firstEvent);
+    }
+
+    public AggregationContext(CategoryClassifier classifier, ProjectDetector projectDetector, FileEvent firstEvent) {
+        this.classifier       = classifier;
+        this.projectDetector  = projectDetector;
+        this.startTime        = firstEvent.getEventTime();
+        this.endTime          = firstEvent.getEventTime();
         add(firstEvent);
     }
 
@@ -60,9 +70,23 @@ public class AggregationContext {
      */
     public String getPrimaryProjectPath() {
         if (projectPaths.isEmpty()) return "";
-        // 按路径长度降序，取最长的公共前缀
         return projectPaths.stream()
             .max(Comparator.comparingInt(String::length))
+            .orElse("");
+    }
+
+    /**
+     * 获取主项目名称(识别到的项目中出现次数最多的)。
+     */
+    public String getPrimaryProjectName() {
+        if (pathToProjectName.isEmpty()) return "";
+        // 统计各项目名称出现次数
+        Map<String, Long> nameCounts = pathToProjectName.values().stream()
+            .filter(n -> n != null && !n.isEmpty())
+            .collect(Collectors.groupingBy(n -> n, Collectors.counting()));
+        return nameCounts.entrySet().stream()
+            .max(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey)
             .orElse("");
     }
 
@@ -148,10 +172,15 @@ public class AggregationContext {
         String category = classifier.classify(event.getExtension());
         categoryCounts.merge(category, 1, Integer::sum);
 
-        // 收集项目路径(取文件所在目录)
+        // 收集项目路径并识别项目名称
         String dir = extractDirectory(normalizedPath);
         if (!dir.isEmpty()) {
             projectPaths.add(dir);
+            // 使用 ProjectDetector 识别项目
+            if (projectDetector != null && !pathToProjectName.containsKey(dir)) {
+                projectDetector.detect(event.getPath())
+                    .ifPresent(project -> pathToProjectName.put(dir, project.getProjectName()));
+            }
         }
     }
 
@@ -165,6 +194,7 @@ public class AggregationContext {
         block.setStartTime(startTime);
         block.setEndTime(endTime);
         block.setCategory(getPrimaryCategory());
+        block.setProjectName(getPrimaryProjectName());
         block.setSummary(buildSummary());
         return block;
     }

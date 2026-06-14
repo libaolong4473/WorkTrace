@@ -1,14 +1,18 @@
 package com.worktrace.ui.controller;
 
 import com.worktrace.collector.FileWatcherService;
+import com.worktrace.database.ActivityRepository;
 import com.worktrace.database.FileEventRepository;
 import com.worktrace.database.ProjectRepository;
 import com.worktrace.model.ActivityBlock;
 import com.worktrace.model.FileEvent;
+import com.worktrace.model.WorkSession;
 import com.worktrace.service.TimelineService;
+import com.worktrace.service.WorkSessionService;
 import com.worktrace.ui.view.ActivityBlockCell;
 import com.worktrace.ui.view.FileDetailCell;
 import com.worktrace.ui.view.ProjectStatsCell;
+import com.worktrace.ui.view.WorkSessionCell;
 
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -19,41 +23,26 @@ import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.scene.Scene;
 import javafx.util.Duration;
 
 import java.net.URL;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
 
 /**
- * 主界面控制器 —— 真实数据驱动。
+ * 主界面控制器 —— 以 WorkSession 为核心展示。
+ *
+ * 展示层级：
+ *   WorkSession（一级）→ 时间线主列表
+ *     └── ActivityBlock（二级）→ 点击 WorkSession 后右侧展示
+ *           └── FileEvent（三级）→ 点击 ActivityBlock 后文件列表展示
  *
  * 数据流：
- *   SQLite → TimelineService / FileEventRepository → MainController → UI
- *
- * 刷新机制：
- *   - 启动时立即加载一次
- *   - WatchService 运行时，每 30 秒自动刷新
- *   - 使用 JavaFX Timeline 在 UI 线程上调度
- *
- * 线程模型：
- *   ┌────────────────────┐     ┌────────────────────┐
- *   │  JavaFX App Thread │     │  WatchService Thread│
- *   │  (UI 更新)         │     │  (事件采集)         │
- *   └────────┬───────────┘     └────────┬───────────┘
- *            │                          │
- *            │  Platform.runLater()     │  FileEventRepo.insert()
- *            │  Timeline (30s tick)     │  EventAggregator.accept()
- *            │                          │
- *            ▼                          ▼
- *   ┌────────────────────┐     ┌────────────────────┐
- *   │  loadAllData()     │     │  flush → batchInsert│
- *   │  → SQLite 读取     │     │  → SQLite 写入      │
- *   └────────────────────┘     └────────────────────┘
+ *   SQLite → WorkSessionService → MainController → UI
  */
 public class MainController implements Initializable {
 
@@ -80,49 +69,56 @@ public class MainController implements Initializable {
 
     // ---------- 中间时间线 ----------
     @FXML private Label lblTimelineTitle;
-    @FXML private Label lblTimelineDate;
-    @FXML private ListView<ActivityBlock> timelineList;
+    @FXML private DatePicker datePicker;
+    @FXML private Button btnToday;
+    @FXML private Button btnYesterday;
+    @FXML private Button btnLast7Days;
+    @FXML private Button btnLast30Days;
+    @FXML private ListView<WorkSession> timelineList;
 
     // ---------- 右侧详情 ----------
     @FXML private Label lblDetailTitle;
     @FXML private Label lblDetailTime;
     @FXML private Label lblDetailDuration;
     @FXML private Label lblDetailFiles;
-    @FXML private ListView<String> detailFileList;
+    @FXML private ListView<ActivityBlock> detailBlockList;
 
     // ---------- 底部状态栏 ----------
     @FXML private Label lblStatusText;
 
     // ---------- 服务依赖 ----------
     private FileWatcherService watcherService;
+    private WorkSessionService workSessionService;
     private TimelineService timelineService;
     private FileEventRepository fileEventRepository;
+    private ActivityRepository activityRepository;
     private ProjectRepository projectRepository;
     private Runnable onStopCallback;
 
     // ---------- 状态 ----------
-    private final ObservableList<ActivityBlock> blockData = FXCollections.observableArrayList();
-    private final ObservableList<String> fileDetailData = FXCollections.observableArrayList();
+    private LocalDate selectedDate = LocalDate.now();
+
+    // ---------- 状态 ----------
+    private final ObservableList<WorkSession> sessionData = FXCollections.observableArrayList();
+    private final ObservableList<ActivityBlock> blockDetailData = FXCollections.observableArrayList();
     private final ObservableList<ProjectRepository.ProjectStats> projectStatsData = FXCollections.observableArrayList();
     private Button activeNavButton;
     private Timeline autoRefreshTimeline;
 
     // ---------- 根面板 + 视图切换 ----------
-    @FXML private javafx.scene.layout.BorderPane rootPane;
+    @FXML private BorderPane rootPane;
     private String currentView = "overview";
     private javafx.scene.Node timelineCenterNode;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         initTimelineList();
-        initDetailFileList();
+        initDetailBlockList();
         initNavigation();
         initWatchToggle();
+        initDatePicker();
 
-        lblTimelineDate.setText(LocalDate.now().format(DATE_FMT));
-
-        // 保存时间线中心节点(FXML 加载完成后赋值)
-        javafx.application.Platform.runLater(() -> {
+        Platform.runLater(() -> {
             timelineCenterNode = rootPane.getCenter();
         });
     }
@@ -130,25 +126,35 @@ public class MainController implements Initializable {
     // ==================== 初始化 ====================
 
     private void initTimelineList() {
-        timelineList.setItems(blockData);
-        timelineList.setCellFactory(list -> new ActivityBlockCell());
-        timelineList.setFixedCellSize(76);
-        timelineList.setPlaceholder(new Label("暂无活动记录"));
+        timelineList.setItems(sessionData);
+        timelineList.setCellFactory(list -> new WorkSessionCell());
+        timelineList.setFixedCellSize(90);
+        timelineList.setPlaceholder(new Label("暂无工作记录"));
 
+        // 点击 WorkSession → 右侧展示其 ActivityBlock 列表
         timelineList.getSelectionModel().selectedItemProperty().addListener(
             (obs, oldVal, newVal) -> {
                 if (newVal != null) {
-                    showBlockDetail(newVal);
+                    showSessionDetail(newVal);
                 }
             }
         );
     }
 
-    private void initDetailFileList() {
-        detailFileList.setItems(fileDetailData);
-        detailFileList.setCellFactory(list -> new FileDetailCell());
-        detailFileList.setFixedCellSize(48);
-        detailFileList.setPlaceholder(new Label("选择一个活动块"));
+    private void initDetailBlockList() {
+        detailBlockList.setItems(blockDetailData);
+        detailBlockList.setCellFactory(list -> new ActivityBlockCell());
+        detailBlockList.setFixedCellSize(76);
+        detailBlockList.setPlaceholder(new Label("选择一个工作会话"));
+
+        // 点击 ActivityBlock → 展示文件列表
+        detailBlockList.getSelectionModel().selectedItemProperty().addListener(
+            (obs, oldVal, newVal) -> {
+                if (newVal != null) {
+                    showBlockFiles(newVal);
+                }
+            }
+        );
     }
 
     private void initNavigation() {
@@ -162,7 +168,6 @@ public class MainController implements Initializable {
         btnToggleWatch.setOnAction(e -> {
             if (watcherService == null) return;
             if (watcherService.isRunning()) {
-                // 停止监听：先停 WatchService，再 flush 聚合器
                 if (onStopCallback != null) {
                     onStopCallback.run();
                 } else {
@@ -170,7 +175,6 @@ public class MainController implements Initializable {
                 }
                 updateWatchStatus(false);
                 btnToggleWatch.setText("▶  开始监听");
-                // 停止后立即刷新 UI，显示缓冲区中聚合出的活动块
                 loadAllData();
             } else {
                 watcherService.start();
@@ -180,12 +184,89 @@ public class MainController implements Initializable {
         });
     }
 
-    // ==================== 自动刷新 ====================
+    // ==================== 日期选择 ====================
+
+    private void initDatePicker() {
+        // DatePicker 默认今天
+        datePicker.setValue(LocalDate.now());
+
+        // DatePicker 切换日期
+        datePicker.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null && !newVal.equals(selectedDate)) {
+                changeDate(newVal);
+            }
+        });
+
+        // 快捷按钮
+        btnToday.setOnAction(e -> changeDate(LocalDate.now()));
+        btnYesterday.setOnAction(e -> changeDate(LocalDate.now().minusDays(1)));
+        btnLast7Days.setOnAction(e -> {
+            selectedDate = LocalDate.now().minusDays(6);
+            datePicker.setValue(null); // 范围模式，清空 DatePicker
+            loadDateRange(LocalDate.now().minusDays(6), LocalDate.now());
+            highlightQuickButton(btnLast7Days);
+        });
+        btnLast30Days.setOnAction(e -> {
+            selectedDate = LocalDate.now().minusDays(29);
+            datePicker.setValue(null);
+            loadDateRange(LocalDate.now().minusDays(29), LocalDate.now());
+            highlightQuickButton(btnLast30Days);
+        });
+
+        // 默认高亮"今天"
+        highlightQuickButton(btnToday);
+    }
+
+    private void changeDate(LocalDate date) {
+        selectedDate = date;
+        datePicker.setValue(date);
+        loadAllData();
+        highlightQuickButton(null); // 清空快捷按钮高亮
+    }
+
+    private void highlightQuickButton(Button active) {
+        for (Button btn : new Button[]{btnToday, btnYesterday, btnLast7Days, btnLast30Days}) {
+            btn.getStyleClass().remove("date-quick-btn-active");
+        }
+        if (active != null) {
+            active.getStyleClass().add("date-quick-btn-active");
+        }
+    }
 
     /**
-     * 启动 30 秒自动刷新。仅在 WatchService 运行时有意义。
-     * 使用 JavaFX Timeline 保证 tick 在 UI 线程执行。
+     * 加载日期范围数据（最近7天/最近30天）。
      */
+    private void loadDateRange(LocalDate from, LocalDate to) {
+        if (workSessionService == null) return;
+
+        // 查询范围内的 WorkSession
+        List<WorkSession> sessions = workSessionService.getSessionsByDateRange(from, to);
+        sessionData.setAll(sessions);
+
+        // 更新概览
+        long totalMinutes = sessions.stream().mapToLong(WorkSession::getDurationMinutes).sum();
+        lblBlockCount.setText(String.valueOf(sessions.size()));
+        lblActiveMinutes.setText(String.valueOf(totalMinutes));
+
+        // 更新标题
+        long days = java.time.Duration.between(from.atStartOfDay(), to.plusDays(1).atStartOfDay()).toDays();
+        lblTimelineTitle.setText("最近 " + days + " 天");
+        lblEventCount.setText(sessions.size() + " 个工作会话 / " + totalMinutes + " 分钟");
+        lblStatusText.setText("已加载 " + from + " 至 " + to + " 的数据");
+
+        // 类别统计（使用 TimelineService 的范围查询）
+        if (timelineService != null) {
+            Map<String, Long> catDuration = timelineService.getCategoryDurationByRange(from, to);
+            lblCatCode.setText(catDuration.getOrDefault("CODE", 0L) + " 分钟");
+            lblCatDocument.setText(catDuration.getOrDefault("DOCUMENT", 0L) + " 分钟");
+            lblCatImage.setText(catDuration.getOrDefault("IMAGE", 0L) + " 分钟");
+            lblCatVideo.setText(catDuration.getOrDefault("VIDEO", 0L) + " 分钟");
+            lblCatConfig.setText(catDuration.getOrDefault("CONFIG", 0L) + " 分钟");
+        }
+    }
+
+    // ==================== 自动刷新 ====================
+
     private void startAutoRefresh() {
         if (autoRefreshTimeline != null) {
             autoRefreshTimeline.stop();
@@ -207,86 +288,135 @@ public class MainController implements Initializable {
     // ==================== 数据加载 ====================
 
     /**
-     * 加载全部数据：时间线 + 类别统计 + 概览数字。
-     * 在 JavaFX App Thread 上执行，可安全更新 UI。
+     * 加载全部数据：WorkSession 时间线 + 类别统计 + 概览数字。
      */
     private void loadAllData() {
-        if (timelineService == null) return;
+        // 1. 加载 WorkSession 列表
+        if (workSessionService != null) {
+            List<WorkSession> sessions = workSessionService.getDailySessions(selectedDate);
+            sessionData.setAll(sessions);
 
-        LocalDate today = LocalDate.now();
+            if (!sessions.isEmpty()) {
+                timelineList.getSelectionModel().selectFirst();
+            }
 
-        // 查询
-        List<ActivityBlock> blocks    = timelineService.getDailyTimeline(today);
-        long totalMinutes             = timelineService.getTotalActiveMinutes(today);
-        Map<String, Long> catDuration = timelineService.getCategoryDuration(today);
+            // 概览数字
+            long totalMinutes = sessions.stream().mapToLong(WorkSession::getDurationMinutes).sum();
 
-        // 更新时间线
-        blockData.setAll(blocks);
-        if (!blocks.isEmpty()) {
-            timelineList.getSelectionModel().selectFirst();
+            lblBlockCount.setText(String.valueOf(sessions.size()));
+            lblActiveMinutes.setText(String.valueOf(totalMinutes));
+
+            // 标题：今天显示"今日"，其他日期显示具体日期
+            String dateLabel = selectedDate.equals(LocalDate.now()) ? "今日" : selectedDate.toString();
+            lblTimelineTitle.setText(dateLabel + "工作会话");
+            lblEventCount.setText(dateLabel + ": " + sessions.size() + " 个工作会话 / " + totalMinutes + " 分钟");
+
+            lblStatusText.setText("已加载 " + sessions.size() + " 个工作会话 · " + selectedDate.format(DATE_FMT));
         }
 
-        // 更新左侧概览
-        lblBlockCount.setText(String.valueOf(blocks.size()));
-        lblActiveMinutes.setText(String.valueOf(totalMinutes));
-
-        // 更新类别统计
-        lblCatCode.setText(catDuration.getOrDefault("CODE", 0L) + " 分钟");
-        lblCatDocument.setText(catDuration.getOrDefault("DOCUMENT", 0L) + " 分钟");
-        lblCatImage.setText(catDuration.getOrDefault("IMAGE", 0L) + " 分钟");
-        lblCatVideo.setText(catDuration.getOrDefault("VIDEO", 0L) + " 分钟");
-        lblCatConfig.setText(catDuration.getOrDefault("CONFIG", 0L) + " 分钟");
-
-        // 更新顶部统计
-        lblEventCount.setText("今日: " + blocks.size() + " 块 / " + totalMinutes + " 分钟");
-
-        lblStatusText.setText("已加载 " + blocks.size() + " 个活动块 · " + today.format(DATE_FMT));
+        // 2. 加载类别统计
+        if (timelineService != null) {
+            Map<String, Long> catDuration = timelineService.getCategoryDuration(selectedDate);
+            lblCatCode.setText(catDuration.getOrDefault("CODE", 0L) + " 分钟");
+            lblCatDocument.setText(catDuration.getOrDefault("DOCUMENT", 0L) + " 分钟");
+            lblCatImage.setText(catDuration.getOrDefault("IMAGE", 0L) + " 分钟");
+            lblCatVideo.setText(catDuration.getOrDefault("VIDEO", 0L) + " 分钟");
+            lblCatConfig.setText(catDuration.getOrDefault("CONFIG", 0L) + " 分钟");
+        }
     }
 
-    // ==================== 右侧详情 ====================
+    // ==================== 右侧详情：WorkSession → ActivityBlock 列表 ====================
 
     /**
-     * 显示选中的活动块详情。
-     * 从 file_event 表查询该时间段内涉及的真实文件列表。
+     * 显示选中的 WorkSession 详情。
+     * 查询该时间段内的 ActivityBlock 列表，展示在右侧。
      */
-    private void showBlockDetail(ActivityBlock block) {
-        lblDetailTitle.setText(block.getSummary());
+    private void showSessionDetail(WorkSession session) {
+        // 更新详情头部
+        lblDetailTitle.setText(session.getTitle());
         lblDetailTime.setText(
-            block.getStartTime().format(TIME_FMT) + " - " +
-            block.getEndTime().format(TIME_FMT)
+            session.getStartTime().format(TIME_FMT) + " - " +
+            session.getEndTime().format(TIME_FMT)
         );
-
-        long minutes = java.time.Duration.between(block.getStartTime(), block.getEndTime()).toMinutes();
-        lblDetailDuration.setText(String.valueOf(Math.max(minutes, 1)));
+        lblDetailDuration.setText(session.getDurationMinutes() + " 分钟");
+        lblDetailFiles.setText(session.getBlockCount() + " 个活动块");
 
         // 更新类别样式
         lblDetailTitle.getStyleClass().removeIf(s -> s.startsWith("card-category-"));
-        lblDetailTitle.getStyleClass().add("card-category-" + block.getCategory().toLowerCase());
+        lblDetailTitle.getStyleClass().add("card-category-" + session.getCategory().toLowerCase());
 
-        // 从 file_event 表查询该时间段的真实文件列表
-        fileDetailData.clear();
-        if (fileEventRepository != null) {
+        // 查询该时间段内的 ActivityBlock
+        blockDetailData.clear();
+        if (activityRepository != null) {
             try {
-                List<FileEvent> files = fileEventRepository.findByTimeRange(
-                    block.getStartTime(), block.getEndTime().plusSeconds(1)
+                List<ActivityBlock> blocks = activityRepository.findByTimeRange(
+                    session.getStartTime(), session.getEndTime().plusSeconds(1)
                 );
-                // 按路径去重
-                java.util.Set<String> seen = new java.util.LinkedHashSet<>();
-                for (FileEvent f : files) {
-                    seen.add(f.getPath());
-                }
-                fileDetailData.addAll(seen);
-                lblDetailFiles.setText(String.valueOf(seen.size()));
+                blockDetailData.setAll(blocks);
             } catch (Exception e) {
-                fileDetailData.add("查询失败: " + e.getMessage());
-                lblDetailFiles.setText("-");
+                lblStatusText.setText("查询活动块失败: " + e.getMessage());
             }
-        } else {
-            fileDetailData.add("(持久化层未初始化)");
-            lblDetailFiles.setText("-");
         }
 
-        lblStatusText.setText("查看: " + block.getSummary());
+        // 清空文件列表（等用户点击 ActivityBlock 时再加载）
+        lblStatusText.setText("查看: " + session.getTitle());
+    }
+
+    // ==================== 三级详情：ActivityBlock → 文件列表 ====================
+
+    /**
+     * 显示选中的 ActivityBlock 的文件列表。
+     * 直接在右侧详情面板下方展示文件列表。
+     */
+    private void showBlockFiles(ActivityBlock block) {
+        if (fileEventRepository == null) return;
+
+        try {
+            List<FileEvent> files = fileEventRepository.findByTimeRange(
+                block.getStartTime(), block.getEndTime().plusSeconds(1)
+            );
+
+            // 按路径去重
+            java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+            for (FileEvent f : files) {
+                seen.add(f.getPath());
+            }
+
+            // 更新文件数显示
+            lblDetailFiles.setText(seen.size() + " 个文件");
+
+            // 弹出文件列表窗口
+            showFileListPopup(block.getSummary(), seen);
+        } catch (Exception e) {
+            lblStatusText.setText("查询文件失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 弹出文件列表窗口。
+     */
+    private void showFileListPopup(String title, java.util.Set<String> filePaths) {
+        javafx.stage.Stage popup = new javafx.stage.Stage();
+        popup.setTitle("文件列表 - " + title);
+
+        VBox content = new VBox(8);
+        content.setPadding(new javafx.geometry.Insets(12));
+
+        Label header = new Label(title);
+        header.getStyleClass().add("timeline-header");
+
+        ListView<String> fileList = new ListView<>();
+        fileList.getItems().addAll(filePaths);
+        fileList.setCellFactory(list -> new FileDetailCell());
+        fileList.setFixedCellSize(48);
+
+        content.getChildren().addAll(header, fileList);
+        VBox.setVgrow(fileList, Priority.ALWAYS);
+
+        Scene scene = new Scene(content, 500, 400);
+        scene.getStylesheets().add(getClass().getResource("/css/style.css").toExternalForm());
+        popup.setScene(scene);
+        popup.show();
     }
 
     // ==================== 导航切换 ====================
@@ -300,32 +430,27 @@ public class MainController implements Initializable {
         currentView = view;
 
         if ("projects".equals(view)) {
-            // 切换到项目统计视图
             rootPane.setCenter(createProjectStatsPanel());
             loadProjectStats();
             lblStatusText.setText("项目统计");
         } else {
-            // 切换回时间线视图
             if (timelineCenterNode != null) {
                 rootPane.setCenter(timelineCenterNode);
             }
             lblTimelineTitle.setText(switch (view) {
-                case "overview" -> "今日时间线";
-                case "timeline" -> "全部时间线";
-                default -> "时间线";
+                case "overview" -> "今日工作会话";
+                case "timeline" -> "全部工作会话";
+                default -> "工作会话";
             });
             lblStatusText.setText("切换到: " + source.getText().trim());
         }
     }
 
-    /**
-     * 创建项目统计面板。
-     */
     private VBox createProjectStatsPanel() {
         Label title = new Label("项目统计");
         title.getStyleClass().add("timeline-header");
 
-        Label date = new Label(LocalDate.now().format(DATE_FMT));
+        Label date = new Label(selectedDate.format(DATE_FMT));
         date.getStyleClass().add("timeline-date");
 
         HBox header = new HBox(12, title, new Region(), date);
@@ -345,13 +470,10 @@ public class MainController implements Initializable {
         return panel;
     }
 
-    /**
-     * 加载项目统计数据。
-     */
     private void loadProjectStats() {
         if (projectRepository == null) return;
         try {
-            var stats = projectRepository.getProjectStats(LocalDate.now());
+            var stats = projectRepository.getProjectStats(selectedDate);
             projectStatsData.setAll(stats);
             lblStatusText.setText("已加载 " + stats.size() + " 个项目");
         } catch (Exception e) {
@@ -398,14 +520,21 @@ public class MainController implements Initializable {
         }
     }
 
+    public void setWorkSessionService(WorkSessionService service) {
+        this.workSessionService = service;
+        Platform.runLater(this::loadAllData);
+    }
+
     public void setTimelineService(TimelineService service) {
         this.timelineService = service;
-        // 注入后立即加载今日数据
-        Platform.runLater(this::loadAllData);
     }
 
     public void setFileEventRepository(FileEventRepository repo) {
         this.fileEventRepository = repo;
+    }
+
+    public void setActivityRepository(ActivityRepository repo) {
+        this.activityRepository = repo;
     }
 
     public void setProjectRepository(ProjectRepository repo) {

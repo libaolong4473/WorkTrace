@@ -303,3 +303,49 @@
     -fx-text-fill: #777777;
     -fx-font-size: 11px;
 }
+
+/* ===== 日期快捷按钮 ===== */
+.date-quick-btn {
+    -fx-background-color: #3C3F41;
+    -fx-text-fill: #BBBBBB;
+    -fx-font-size: 11px;
+    -fx-padding: 3 10;
+    -fx-background-radius: 4;
+    -fx-cursor: hand;
+    -fx-border-color: #555555;
+    -fx-border-radius: 4;
+}
+
+.date-quick-btn:hover {
+    -fx-background-color: #4E5254;
+    -fx-text-fill: #FFFFFF;
+}
+
+.date-quick-btn-active {
+    -fx-background-color: #4A90D9;
+    -fx-text-fill: #FFFFFF;
+    -fx-border-color: #4A90D9;
+}
+
+/* ===== DatePicker 暗色主题 ===== */
+.date-picker {
+    -fx-background-color: #3C3F41;
+    -fx-border-color: #555555;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+
+.date-picker .text-field {
+    -fx-background-color: #3C3F41;
+    -fx-text-fill: #DDDDDD;
+    -fx-font-size: 12px;
+}
+
+.date-picker .button {
+    -fx-background-color: #4E5254;
+    -fx-border-color: #555555;
+}
+
+.date-picker .popup-control .arrow-button {
+    -fx-background-color: transparent;
+}

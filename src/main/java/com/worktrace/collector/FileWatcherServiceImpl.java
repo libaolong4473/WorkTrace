@@ -53,13 +53,16 @@ public class FileWatcherServiceImpl implements FileWatcherService {
     /** 合并后的排除目录集合（默认 + 用户配置） */
     private final Set<String> excludedDirs = new HashSet<>();
 
+    /** 文件级噪声过滤器 */
+    private final NoiseFilter noiseFilter = new NoiseFilter();
+
     private final Map<WatchKey, Path> watchKeyToPath = new ConcurrentHashMap<>();
     private final Map<Path, WatchKey> pathToWatchKey = new ConcurrentHashMap<>();
     private final Set<Path> rootDirs = ConcurrentHashMap.newKeySet();
     private final List<FileEventListener> listeners = new CopyOnWriteArrayList<>();
 
-    /** 事件防抖器：2 秒内同文件重复 MODIFY 只保留最后一次 */
-    private final EventDebouncer debouncer = new EventDebouncer(2000);
+    /** 事件去抖器：500ms 内同文件同类型重复事件只保留第一次 */
+    private final EventDebouncer debouncer = new EventDebouncer(500);
 
     /** 异步注册完成信号 */
     private volatile CountDownLatch registrationDone = new CountDownLatch(0);
@@ -236,6 +239,7 @@ public class FileWatcherServiceImpl implements FileWatcherService {
 
     private void pollLoop() {
         LogUtil.info("监听线程已启动，等待事件...");
+        long lastCleanup = System.currentTimeMillis();
         while (running) {
             WatchKey key;
             try {
@@ -265,6 +269,13 @@ public class FileWatcherServiceImpl implements FileWatcherService {
                 watchKeyToPath.remove(key);
                 pathToWatchKey.remove(dir);
             }
+
+            // 每 60 秒清理一次去抖器过期条目
+            long now = System.currentTimeMillis();
+            if (now - lastCleanup > 60_000) {
+                debouncer.cleanup();
+                lastCleanup = now;
+            }
         }
         LogUtil.info("监听线程已退出");
     }
@@ -275,8 +286,8 @@ public class FileWatcherServiceImpl implements FileWatcherService {
         // 1. 目录级排除
         if (isExcluded(filePath)) return;
 
-        // 2. 噪声文件过滤
-        if (NoiseFilter.isNoise(filePath)) return;
+        // 2. 噪声文件过滤（支持配置扩展）
+        if (noiseFilter.isNoise(filePath)) return;
 
         String eventType = mapKind(kind);
         if (eventType == null) return;

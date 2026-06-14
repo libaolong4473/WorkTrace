@@ -21,11 +21,12 @@ CREATE INDEX IF NOT EXISTS idx_file_event_type     ON file_event(event_type);
 
 -- 活动块表：由事件聚合而成的时间段
 CREATE TABLE IF NOT EXISTS activity_block (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    start_time  TEXT    NOT NULL,               -- ISO-8601
-    end_time    TEXT    NOT NULL,               -- ISO-8601
-    category    TEXT    DEFAULT 'OTHER',        -- CODE / DOCUMENT / IMAGE / VIDEO / CONFIG / OTHER
-    summary     TEXT    DEFAULT ''              -- 人工或 AI 生成的摘要
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    start_time   TEXT    NOT NULL,               -- ISO-8601
+    end_time     TEXT    NOT NULL,               -- ISO-8601
+    category     TEXT    DEFAULT 'OTHER',        -- CODE / DOCUMENT / IMAGE / VIDEO / CONFIG / OTHER
+    summary      TEXT    DEFAULT '',             -- 人工或 AI 生成的摘要
+    project_name TEXT    DEFAULT ''              -- 项目名称(由 ProjectDetector 自动识别)
 );
 
 CREATE INDEX IF NOT EXISTS idx_activity_block_time ON activity_block(start_time, end_time);
@@ -42,3 +43,19 @@ CREATE TABLE IF NOT EXISTS project_info (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_project_root ON project_info(root_path);
+
+-- 工作会话表：由多个 ActivityBlock 聚合而成的工作段落
+CREATE TABLE IF NOT EXISTS work_session (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    start_time      TEXT    NOT NULL,               -- ISO-8601
+    end_time        TEXT    NOT NULL,               -- ISO-8601
+    project_name    TEXT    DEFAULT '',             -- 项目名称
+    category        TEXT    DEFAULT 'OTHER',        -- 主类别
+    title           TEXT    DEFAULT '',             -- 会话标题
+    block_count     INTEGER DEFAULT 0,             -- 包含的 ActivityBlock 数
+    file_count      INTEGER DEFAULT 0,             -- 涉及的文件数
+    duration_minutes INTEGER DEFAULT 0             -- 总时长(分钟)
+);
+
+CREATE INDEX IF NOT EXISTS idx_work_session_time ON work_session(start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_work_session_project ON work_session(project_name);

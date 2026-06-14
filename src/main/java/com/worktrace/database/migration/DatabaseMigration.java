@@ -39,6 +39,12 @@ public class DatabaseMigration {
         if (current < 2) {
             migrateToV2();
         }
+        if (current < 3) {
+            migrateToV3();
+        }
+        if (current < 4) {
+            migrateToV4();
+        }
     }
 
     private void ensureVersionTable() throws SQLException {
@@ -77,6 +83,55 @@ public class DatabaseMigration {
         }
         try (var ps = conn.prepareStatement(
                 "INSERT OR IGNORE INTO schema_version(version) VALUES(2)")) {
+            ps.executeUpdate();
+        }
+    }
+
+    private void migrateToV3() throws SQLException {
+        // V3: activity_block 增加 project_name 列
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute("""
+                ALTER TABLE activity_block ADD COLUMN project_name TEXT DEFAULT ''
+                """);
+        } catch (SQLException e) {
+            // 列已存在时忽略（ALTER TABLE 不支持 IF NOT EXISTS）
+            if (!e.getMessage().contains("duplicate column")) {
+                throw e;
+            }
+        }
+        try (var ps = conn.prepareStatement(
+                "INSERT OR IGNORE INTO schema_version(version) VALUES(3)")) {
+            ps.executeUpdate();
+        }
+    }
+
+    private void migrateToV4() throws SQLException {
+        // V4: 新建 work_session 表
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute("""
+                CREATE TABLE IF NOT EXISTS work_session (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    start_time      TEXT    NOT NULL,
+                    end_time        TEXT    NOT NULL,
+                    project_name    TEXT    DEFAULT '',
+                    category        TEXT    DEFAULT 'OTHER',
+                    title           TEXT    DEFAULT '',
+                    block_count     INTEGER DEFAULT 0,
+                    file_count      INTEGER DEFAULT 0,
+                    duration_minutes INTEGER DEFAULT 0
+                )
+                """);
+            stmt.execute("""
+                CREATE INDEX IF NOT EXISTS idx_work_session_time
+                    ON work_session(start_time, end_time)
+                """);
+            stmt.execute("""
+                CREATE INDEX IF NOT EXISTS idx_work_session_project
+                    ON work_session(project_name)
+                """);
+        }
+        try (var ps = conn.prepareStatement(
+                "INSERT OR IGNORE INTO schema_version(version) VALUES(4)")) {
             ps.executeUpdate();
         }
     }

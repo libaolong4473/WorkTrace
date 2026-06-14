@@ -11,8 +11,9 @@ public class ActivityBlock {
     private long id;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
-    private String category;    // CODE / DOCUMENT / CONFIG / MEDIA / OTHER
-    private String summary;     // 摘要(可由 AI 生成)
+    private String category;     // CODE / DOCUMENT / IMAGE / VIDEO / CONFIG / OTHER
+    private String summary;      // 摘要(可由 AI 生成)
+    private String projectName;  // 项目名称(由 ProjectDetector 自动识别)
 
     public ActivityBlock() {}
 
@@ -40,4 +41,7 @@ public class ActivityBlock {
 
     public String getSummary()                             { return summary; }
     public void setSummary(String summary)                 { this.summary = summary; }
+
+    public String getProjectName()                         { return projectName; }
+    public void setProjectName(String projectName)         { this.projectName = projectName; }
 }

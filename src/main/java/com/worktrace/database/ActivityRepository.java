@@ -36,14 +36,15 @@ public class ActivityRepository {
      */
     public long insert(ActivityBlock block) throws SQLException {
         String sql = """
-            INSERT OR IGNORE INTO activity_block (start_time, end_time, category, summary)
-            VALUES (?, ?, ?, ?)
+            INSERT OR IGNORE INTO activity_block (start_time, end_time, category, summary, project_name)
+            VALUES (?, ?, ?, ?, ?)
             """;
         try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, block.getStartTime().toString());
             ps.setString(2, block.getEndTime().toString());
             ps.setString(3, block.getCategory());
             ps.setString(4, block.getSummary());
+            ps.setString(5, block.getProjectName() != null ? block.getProjectName() : "");
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 return rs.next() ? rs.getLong(1) : -1;
@@ -58,8 +59,8 @@ public class ActivityRepository {
     public int batchInsert(List<ActivityBlock> blocks) throws SQLException {
         if (blocks == null || blocks.isEmpty()) return 0;
         String sql = """
-            INSERT OR IGNORE INTO activity_block (start_time, end_time, category, summary)
-            VALUES (?, ?, ?, ?)
+            INSERT OR IGNORE INTO activity_block (start_time, end_time, category, summary, project_name)
+            VALUES (?, ?, ?, ?, ?)
             """;
         int count = 0;
         boolean originalAutoCommit = conn.getAutoCommit();
@@ -71,6 +72,7 @@ public class ActivityRepository {
                     ps.setString(2, block.getEndTime().toString());
                     ps.setString(3, block.getCategory());
                     ps.setString(4, block.getSummary());
+                    ps.setString(5, block.getProjectName() != null ? block.getProjectName() : "");
                     ps.addBatch();
                 }
                 int[] results = ps.executeBatch();
@@ -177,6 +179,22 @@ public class ActivityRepository {
         return new PageResult<>(data, total, page, pageSize);
     }
 
+    // ==================== 时间范围查询 ====================
+
+    /**
+     * 按时间范围查询活动块(不分页，返回全部)。
+     * 用于 WorkSession 详情面板，查询某会话时间段内涉及的活动块。
+     */
+    public List<ActivityBlock> findByTimeRange(LocalDateTime from, LocalDateTime to) throws SQLException {
+        String sql = """
+            SELECT id, start_time, end_time, category, summary, project_name
+            FROM activity_block
+            WHERE start_time >= ? AND start_time < ?
+            ORDER BY start_time ASC
+            """;
+        return executeQuery(sql, from.toString(), to.toString());
+    }
+
     // ==================== 统计 ====================
 
     /**
@@ -185,7 +203,12 @@ public class ActivityRepository {
     public List<CategoryDuration> durationByCategory(LocalDate date) throws SQLException {
         String sql = """
             SELECT category,
-                   SUM(MAX(1, ROUND((julianday(end_time) - julianday(start_time)) * 1440))) AS minutes
+                   COALESCE(SUM(
+                       MAX(1, ROUND(
+                           (julianday(REPLACE(end_time,   'T', ' '))
+                          - julianday(REPLACE(start_time, 'T', ' '))) * 1440
+                       ))
+                   ), 0) AS minutes
             FROM activity_block
             WHERE start_time >= ? AND start_time < ?
             GROUP BY category
@@ -218,7 +241,12 @@ public class ActivityRepository {
      */
     public long totalDurationByDate(LocalDate date) throws SQLException {
         String sql = """
-            SELECT COALESCE(SUM(MAX(1, ROUND((julianday(end_time) - julianday(start_time)) * 1440))), 0)
+            SELECT COALESCE(SUM(
+                MAX(1, ROUND(
+                    (julianday(REPLACE(end_time,   'T', ' '))
+                   - julianday(REPLACE(start_time, 'T', ' '))) * 1440
+                ))
+            ), 0)
             FROM activity_block
             WHERE start_time >= ? AND start_time < ?
             """;
@@ -262,6 +290,7 @@ public class ActivityRepository {
         b.setEndTime(LocalDateTime.parse(rs.getString("end_time")));
         b.setCategory(rs.getString("category"));
         b.setSummary(rs.getString("summary"));
+        b.setProjectName(rs.getString("project_name"));
         return b;
     }
 

@@ -89,10 +89,15 @@
         <VBox fx:id="timelinePanel" styleClass="timeline-panel" spacing="8">
             <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
 
-            <HBox spacing="12" alignment="CENTER_LEFT">
+            <!-- 日期选择 + 快捷按钮 -->
+            <HBox spacing="8" alignment="CENTER_LEFT">
                 <Label fx:id="lblTimelineTitle" text="今日时间线" styleClass="timeline-header"/>
                 <Region HBox.hgrow="ALWAYS"/>
-                <Label fx:id="lblTimelineDate" styleClass="timeline-date"/>
+                <Button fx:id="btnToday"     text="今天"     styleClass="date-quick-btn" />
+                <Button fx:id="btnYesterday"  text="昨天"     styleClass="date-quick-btn" />
+                <Button fx:id="btnLast7Days"  text="最近7天"  styleClass="date-quick-btn" />
+                <Button fx:id="btnLast30Days" text="最近30天" styleClass="date-quick-btn" />
+                <DatePicker fx:id="datePicker" styleClass="date-picker"/>
             </HBox>
 
             <ListView fx:id="timelineList" styleClass="timeline-list" VBox.vgrow="ALWAYS"/>
@@ -104,9 +109,9 @@
         <VBox fx:id="detailPanel" styleClass="detail-panel" prefWidth="280" spacing="8">
             <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
 
-            <Label fx:id="lblDetailTitle" text="活动详情" styleClass="detail-header"/>
+            <Label fx:id="lblDetailTitle" text="工作会话详情" styleClass="detail-header"/>
 
-            <Label fx:id="lblDetailTime" text="选择一个活动块查看详情" styleClass="detail-time"/>
+            <Label fx:id="lblDetailTime" text="选择一个工作会话查看详情" styleClass="detail-time"/>
 
             <!-- 统计卡片区域 -->
             <HBox fx:id="detailStatsBox" spacing="8">
@@ -122,9 +127,9 @@
 
             <Separator styleClass="sidebar-divider" maxWidth="Infinity"/>
 
-            <Label text="涉及文件" styleClass="detail-section-title"/>
+            <Label text="活动块" styleClass="detail-section-title"/>
 
-            <ListView fx:id="detailFileList" VBox.vgrow="ALWAYS" styleClass="timeline-list"/>
+            <ListView fx:id="detailBlockList" VBox.vgrow="ALWAYS" styleClass="timeline-list"/>
         </VBox>
     </right>
 

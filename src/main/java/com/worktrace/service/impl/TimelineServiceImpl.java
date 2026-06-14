@@ -6,7 +6,6 @@ import com.worktrace.service.TimelineService;
 import com.worktrace.util.LogUtil;
 
 import java.time.LocalDate;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
@@ -108,6 +107,31 @@ public class TimelineServiceImpl implements TimelineService {
             LogUtil.error("查询总活动时长失败: " + e.getMessage());
             return 0;
         }
+    }
+
+    @Override
+    public Map<String, Long> getCategoryDurationByRange(LocalDate from, LocalDate to) {
+        Map<String, Long> result = new java.util.LinkedHashMap<>();
+        for (Category cat : Category.values()) {
+            result.put(cat.key, 0L);
+        }
+
+        try {
+            // 逐日累加
+            LocalDate current = from;
+            while (!current.isAfter(to)) {
+                List<ActivityRepository.CategoryDuration> durations =
+                    activityRepository.durationByCategory(current);
+                for (ActivityRepository.CategoryDuration cd : durations) {
+                    result.merge(cd.category(), cd.minutes(), Long::sum);
+                }
+                current = current.plusDays(1);
+            }
+        } catch (Exception e) {
+            LogUtil.error("统计类别时长(范围)失败: " + e.getMessage());
+        }
+
+        return result;
     }
 
     // ==================== 内部常量 ====================

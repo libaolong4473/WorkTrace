@@ -27,4 +27,7 @@ public interface TimelineService {
 
     /** 获取指定日期的总活动时长(分钟)。 */
     long getTotalActiveMinutes(LocalDate date);
+
+    /** 获取日期范围内各活动类别的总时长(分钟)。 */
+    java.util.Map<String, Long> getCategoryDurationByRange(LocalDate from, LocalDate to);
 }

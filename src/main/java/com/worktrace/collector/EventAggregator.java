@@ -5,6 +5,7 @@ import com.worktrace.model.FileEvent;
 import com.worktrace.timeline.ActivityBlockGenerator;
 import com.worktrace.timeline.MergeConfig;
 import com.worktrace.util.LogUtil;
+import com.worktrace.collector.ProjectDetector;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,6 +45,18 @@ public class EventAggregator {
      */
     public EventAggregator(CategoryClassifier classifier, Consumer<List<ActivityBlock>> onFlush) {
         this.generator = new ActivityBlockGenerator(classifier, MergeConfig.DEFAULT);
+        this.batchSize = 100;
+        this.onFlush   = onFlush;
+    }
+
+    /**
+     * @param classifier      类别分类器
+     * @param projectDetector 项目识别器
+     * @param onFlush         聚合完成后的回调
+     */
+    public EventAggregator(CategoryClassifier classifier, ProjectDetector projectDetector,
+                           Consumer<List<ActivityBlock>> onFlush) {
+        this.generator = new ActivityBlockGenerator(classifier, MergeConfig.DEFAULT, projectDetector);
         this.batchSize = 100;
         this.onFlush   = onFlush;
     }

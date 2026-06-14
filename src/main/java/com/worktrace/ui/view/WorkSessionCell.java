@@ -1,6 +1,6 @@
 package com.worktrace.ui.view;
 
-import com.worktrace.model.ActivityBlock;
+import com.worktrace.model.WorkSession;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -8,22 +8,21 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
-import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 
 /**
- * 时间线 ActivityBlock 的自定义单元格。
+ * WorkSession 时间线卡片单元格。
  *
  * 渲染效果：
  * ┌──────────────────────────────────────────────────┐
- * │  09:01 - 09:35                    34分钟  5文件   │
- * │  代码开发 · App.java 等5个文件    [CODE]          │
+ * │  09:00 - 10:00                    CODE · 60分钟  │
+ * │  WorkTrace 开发                                   │
+ * │  WorkTrace · 5 个活动块 · 12 个文件              │
  * └──────────────────────────────────────────────────┘
  */
-public class ActivityBlockCell extends ListCell<ActivityBlock> {
+public class WorkSessionCell extends ListCell<WorkSession> {
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -31,33 +30,35 @@ public class ActivityBlockCell extends ListCell<ActivityBlock> {
     private final VBox leftBox  = new VBox(4);
     private final VBox rightBox = new VBox(4);
     private final Label lblTime      = new Label();
-    private final Label lblSummary   = new Label();
-    private final Label lblCategory  = new Label();
+    private final Label lblTitle     = new Label();
     private final Label lblMeta      = new Label();
+    private final Label lblCategory  = new Label();
+    private final Label lblDuration  = new Label();
 
-    public ActivityBlockCell() {
-        // 左侧：时间 + 摘要
-        leftBox.getChildren().addAll(lblTime, lblSummary);
+    public WorkSessionCell() {
+        // 左侧：时间 + 标题 + 元信息
+        leftBox.getChildren().addAll(lblTime, lblTitle, lblMeta);
         HBox.setHgrow(leftBox, Priority.ALWAYS);
 
-        // 右侧：类别标签 + 元信息
+        // 右侧：类别 + 时长
         rightBox.setAlignment(Pos.CENTER_RIGHT);
-        rightBox.getChildren().addAll(lblCategory, lblMeta);
+        rightBox.getChildren().addAll(lblCategory, lblDuration);
 
         root.getChildren().addAll(leftBox, rightBox);
         root.setAlignment(Pos.CENTER_LEFT);
-        root.setPadding(new Insets(10, 14, 10, 14));
+        root.setPadding(new Insets(12, 16, 12, 16));
         root.getStyleClass().add("timeline-card");
 
-        // 固定样式
+        // 样式
         lblTime.getStyleClass().add("card-time");
-        lblSummary.getStyleClass().add("card-summary");
-        lblCategory.getStyleClass().add("card-category");
+        lblTitle.getStyleClass().add("card-summary");
         lblMeta.getStyleClass().add("card-file-count");
+        lblCategory.getStyleClass().add("card-category");
+        lblDuration.getStyleClass().add("card-file-count");
     }
 
     @Override
-    protected void updateItem(ActivityBlock item, boolean empty) {
+    protected void updateItem(WorkSession item, boolean empty) {
         super.updateItem(item, empty);
 
         if (empty || item == null) {
@@ -69,24 +70,22 @@ public class ActivityBlockCell extends ListCell<ActivityBlock> {
         lblTime.setText(item.getStartTime().format(TIME_FMT) + " - " +
                         item.getEndTime().format(TIME_FMT));
 
-        // 摘要（含项目名称）
-        String projectPrefix = "";
-        if (item.getProjectName() != null && !item.getProjectName().isEmpty()) {
-            projectPrefix = "[" + item.getProjectName() + "] ";
-        }
-        lblSummary.setText(projectPrefix + item.getSummary());
+        // 标题
+        lblTitle.setText(item.getTitle());
+
+        // 元信息：项目 · 活动块数 · 文件数
+        String project = item.getProjectName() != null && !item.getProjectName().isEmpty()
+            ? item.getProjectName() : "未分类";
+        lblMeta.setText(project + " · " + item.getBlockCount() + " 个活动块 · " +
+                        item.getFileCount() + " 个文件");
 
         // 类别标签
         lblCategory.setText(categoryLabel(item.getCategory()));
         lblCategory.getStyleClass().removeIf(s -> s.startsWith("card-category-"));
         lblCategory.getStyleClass().add("card-category-" + item.getCategory().toLowerCase());
 
-        // 元信息：时长
-        long minutes = Duration.between(item.getStartTime(), item.getEndTime()).toMinutes();
-        lblMeta.setText(Math.max(minutes, 1) + "分钟");
-
-        // 选中状态样式
-        root.getStyleClass().remove("timeline-card-selected");
+        // 时长
+        lblDuration.setText(item.getDurationMinutes() + " 分钟");
 
         setGraphic(root);
     }

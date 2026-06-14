@@ -39,8 +39,10 @@ public class Config {
         props.setProperty("watch.dirs",           System.getProperty("user.home") + "\\Desktop;" +
                                                   System.getProperty("user.home") + "\\Documents");
         props.setProperty("watch.exclude.dirs",   ".git;.idea;node_modules;target;build;dist;out;.cache;__pycache__;ShaderCache;.vscode;.gradle;.worktrace;Thumbs.db");
+        props.setProperty("watch.exclude.files",  ".log;.tmp;.wal;.journal;.ldb;.lock;.part;.download;.swp;.bak;.cache;.temp;.db-wal;.db-shm");
         props.setProperty("aggregate.gap.minutes", "5");
         props.setProperty("db.path",              CONFIG_DIR.resolve("worktrace.db").toString());
+        props.setProperty("retention.file_event.days", "90");
 
         // 尝试覆盖用户配置
         if (Files.exists(CONFIG_FILE)) {

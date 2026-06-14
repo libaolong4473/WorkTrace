@@ -4,29 +4,50 @@ import java.nio.file.Path;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 事件防抖器 —— 同一文件短时间内多次 MODIFY 只保留最后一次。
+ * 事件去抖器 —— 合并短时间内同一文件的重复事件。
  *
- * 原理：
- *   维护一个 Map<filePath, lastEventTimestamp>，
- *   当同一文件在 debounceWindowMs 内再次触发时，丢弃前一次。
+ * 去抖规则：
+ *   同一路径 + 同一事件类型 + 500ms 内重复 → 只保留第一次。
+ *
+ * 典型场景：
+ *   IDE 保存文件时触发 3-5 次 MODIFY（buffer write, flush, metadata update），
+ *   去抖后只保留第一次，减少 80% 重复事件。
+ *
+ * 时序图：
+ *   10:00:01.000 MODIFY A.java  → 放行（首次）
+ *   10:00:01.200 MODIFY A.java  → 丢弃（500ms 内）
+ *   10:00:01.400 MODIFY A.java  → 丢弃（500ms 内）
+ *   10:00:01.600 MODIFY A.java  → 放行（超过 500ms）
+ *   10:00:02.000 CREATE B.java  → 放行（不同文件）
+ *   10:00:02.100 DELETE A.java  → 放行（不同事件类型）
  *
  * 线程安全：使用 ConcurrentHashMap，支持多线程并发调用。
- *
- * 使用场景：
- *   IDE 保存文件时可能触发 3-5 次 MODIFY 事件（buffer write, flush, metadata update），
- *   防抖后只保留最后一次，减少 80% 的重复事件。
  */
 public class EventDebouncer {
 
-    /** 默认防抖窗口：2 秒 */
-    private static final long DEFAULT_DEBOUNCE_MS = 2000;
+    /** 默认去抖窗口：500 毫秒 */
+    private static final long DEFAULT_DEBOUNCE_MS = 500;
 
-    /** filePath → 最后一次放行事件的时间戳 */
-    private final ConcurrentHashMap<String, Long> lastEventTime = new ConcurrentHashMap<>();
+    /** 条目过期时间：60 秒未更新则清理 */
+    private static final long ENTRY_EXPIRE_MS = 60_000;
 
-    /** filePath → 最后一次放行的事件类型 */
-    private final ConcurrentHashMap<String, String> lastEventType = new ConcurrentHashMap<>();
+    /**
+     * 去抖条目：记录每个文件最后一次放行事件的时间戳和类型。
+     */
+    private static class DebounceEntry {
+        final long timestamp;
+        final String eventType;
 
+        DebounceEntry(long timestamp, String eventType) {
+            this.timestamp = timestamp;
+            this.eventType = eventType;
+        }
+    }
+
+    /** 绝对路径 → 最后一次放行的事件条目 */
+    private final ConcurrentHashMap<String, DebounceEntry> entries = new ConcurrentHashMap<>();
+
+    /** 去抖窗口（毫秒） */
     private final long debounceWindowMs;
 
     public EventDebouncer() {
@@ -40,49 +61,65 @@ public class EventDebouncer {
     /**
      * 判断事件是否应该放行。
      *
+     * 规则：
+     *   - CREATE / DELETE：永远放行（不做去抖）
+     *   - MODIFY：同路径同类型在窗口内 → 丢弃
+     *
      * @param filePath  文件路径
      * @param eventType 事件类型 (CREATE / MODIFY / DELETE)
-     * @param timestamp 事件时间戳(毫秒)
-     * @return true = 放行，false = 被防抖吞掉
+     * @param timestamp 事件时间戳（毫秒，System.currentTimeMillis()）
+     * @return true = 放行，false = 被去抖吞掉
      */
     public boolean shouldPass(Path filePath, String eventType, long timestamp) {
         String key = filePath.toAbsolutePath().toString();
+        return shouldPassInternal(key, eventType, timestamp);
+    }
 
-        // CREATE 和 DELETE 永远放行(不做防抖)
+    /**
+     * 判断事件是否应该放行（字符串路径版本，用于测试）。
+     */
+    public boolean shouldPass(String absolutePath, String eventType, long timestamp) {
+        return shouldPassInternal(absolutePath, eventType, timestamp);
+    }
+
+    private boolean shouldPassInternal(String key, String eventType, long timestamp) {
+        // CREATE 和 DELETE 永远放行
         if (!"MODIFY".equals(eventType)) {
-            lastEventTime.put(key, timestamp);
-            lastEventType.put(key, eventType);
+            entries.put(key, new DebounceEntry(timestamp, eventType));
             return true;
         }
 
-        Long lastTime = lastEventTime.get(key);
-        String lastType = lastEventType.get(key);
+        DebounceEntry last = entries.get(key);
 
         // 首次出现 → 放行
-        if (lastTime == null) {
-            lastEventTime.put(key, timestamp);
-            lastEventType.put(key, eventType);
+        if (last == null) {
+            entries.put(key, new DebounceEntry(timestamp, eventType));
             return true;
         }
 
-        // 同一文件在防抖窗口内的 MODIFY → 丢弃
-        if (timestamp - lastTime < debounceWindowMs && "MODIFY".equals(lastType)) {
+        // 同一文件在去抖窗口内的 MODIFY → 丢弃
+        if ("MODIFY".equals(last.eventType) && timestamp - last.timestamp < debounceWindowMs) {
             return false;
         }
 
-        // 超过防抖窗口 → 放行
-        lastEventTime.put(key, timestamp);
-        lastEventType.put(key, eventType);
+        // 超过去抖窗口或上次是不同类型 → 放行
+        entries.put(key, new DebounceEntry(timestamp, eventType));
         return true;
     }
 
     /**
-     * 清理过期条目(防止内存泄漏)。
-     * 建议每隔 5 分钟调用一次。
+     * 清理过期条目，防止内存泄漏。
+     * 建议每隔 1-5 分钟调用一次。
      */
     public void cleanup() {
         long now = System.currentTimeMillis();
-        lastEventTime.entrySet().removeIf(e -> now - e.getValue() > 60_000);
-        lastEventType.entrySet().removeIf(e -> !lastEventTime.containsKey(e.getKey()));
+        entries.entrySet().removeIf(e -> now - e.getValue().timestamp > ENTRY_EXPIRE_MS);
+    }
+
+    /**
+     * 获取当前条目数（用于监控和测试）。
+     */
+    public int size() {
+        return entries.size();
     }
 }
