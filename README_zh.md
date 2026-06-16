@@ -14,16 +14,14 @@ WorkTrace 可以。
 
 ## 它做什么
 
-WorkTrace 在后台安静运行，观察你数字工作空间中文件的创建、修改和删除。它将成千上万条底层文件事件聚合为有意义的活动块——你实际工作的人类可读记录。
+WorkTrace 在后台安静运行，观察你数字工作空间中文件的创建、修改和删除。它将成千上万条底层文件事件聚合为有意义的**工作会话**——你实际工作的人类可读记录。
 
 你看到的不是 47 次零散的文件保存，而是这样的时间线：
 
 ```
-09:01 - 09:35  │  软件开发      │  WorkTraceApp.java +5 个文件
-10:05 - 10:20  │  文档编辑      │  研究方案.docx
-10:30 - 10:50  │  图片处理      │  截图_2026.png +3 个文件
-14:10 - 14:30  │  文件下载      │  面试指南.pdf +2 个文件
-15:00 - 15:25  │  团队协作      │  共享文档更新
+09:00 - 10:00  │  WorkTrace 开发      │  5 个活动块 · 12 个文件 · 60 分钟
+10:30 - 10:55  │  文档编辑            │  2 个活动块 · 3 个文件  · 25 分钟
+14:00 - 14:15  │  OtherApp 开发       │  1 个活动块 · 4 个文件  · 15 分钟
 ```
 
 这不是文件搜索。这不是文件系统检查。这是**数字记忆**——你工作生活的被动、永久记录。
@@ -38,40 +36,21 @@ WorkTrace 就是为了改变这一切。
 
 把它想象成**整个电脑的 git log**，而不仅仅是代码仓库。几个月后，你可以调出任意一天的记录，精确看到你处理了哪些文件、哪些项目占用了你的时间、一天中发生了哪些类型的活动。
 
-## 活动时间线示例
-
-WorkTrace 眼中的一天：
-
-```
-09:01 - 09:35  │  软件开发      │  WorkTraceApp.java +5 个文件
-10:05 - 10:20  │  文档编辑      │  研究方案.docx
-10:30 - 10:50  │  图片处理      │  截图_2026.png +3 个文件
-11:00 - 11:45  │  软件开发      │  MainController.java +8 个文件
-14:10 - 14:30  │  文件下载      │  面试指南.pdf +2 个文件
-15:00 - 15:25  │  团队协作      │  共享文档更新
-15:30 - 16:10  │  配置修改      │  pom.xml +3 个文件
-16:20 - 17:00  │  文档编辑      │  会议纪要.md +2 个文件
-```
-
-每一个活动块都在讲述一个故事。不需要任何手动输入。
-
-## 愿景
-
-WorkTrace 的长期目标是将原始数字活动转化为**可检索的个人工作历史**。
-
-今天，它捕获文件级别的事件并将其分组为活动块。未来，它将理解项目、识别模式，并揭示你实际如何分配时间的洞察。
-
-终极愿景：**一个记住你在电脑上所做一切的个人知识系统**，让你再也不用猜测"我当时在做什么"。
-
 ## 功能特性
 
+- **工作会话聚合** — 将活动块聚合为有意义的工作会话（30 分钟窗口）
 - **自动活动追踪** — 在后台安静运行，无需手动输入
-- **智能事件聚合** — 将关联文件事件分组为有意义的活动块
+- **智能事件聚合** — 将关联文件事件分组为活动块（15 分钟窗口）
 - **类别自动识别** — 自动识别代码、文档、图片、视频和配置文件
-- **项目感知分组** — 同一项目的文件自动合并，不受类型限制
-- **持久化历史** — 所有活动本地存储在 SQLite 中，随时可以回顾
-- **暗色主题 UI** — 简洁现代的界面，包含时间线、详情面板和类别分布
-- **实时更新** — 追踪运行时时间线自动刷新
+- **项目自动识别** — 从 .git、pom.xml、package.json 等 15 种标志文件自动检测项目
+- **噪声过滤** — 过滤系统文件、缓存、临时文件、随机文件名和应用特定噪声
+- **事件去抖** — 500ms 去抖窗口，消除 80% 的 IDE 重复保存事件
+- **历史日期浏览** — 日期选择器 + 快捷按钮（今天/昨天/7天/30天）
+- **异步写入队列** — 高性能 ArrayBlockingQueue 解耦文件监听和数据库写入
+- **数据生命周期** — 原始事件自动保留 90 天，工作会话永久保存
+- **持久化历史** — 所有活动本地存储在 SQLite 中（WAL 模式）
+- **暗色主题 UI** — IntelliJ IDEA 风格界面，三栏可拖拽布局
+- **文件操作** — 从详情面板打开文件或打开文件所在目录
 
 ## 技术栈
 
@@ -106,14 +85,23 @@ mvn clean javafx:run
 
 ### 配置
 
-编辑 `~/.worktrace/config.properties`，选择要追踪的目录：
+编辑 `~/.worktrace/config.properties` 自定义配置：
 
 ```properties
 # 观察目录（分号分隔）
 watch.dirs=C:\Users\you\Desktop;C:\Users\you\Documents;D:\projects
 
+# 排除目录
+watch.exclude.dirs=.git;node_modules;target;.idea;LarkCache;WXWork
+
+# 排除文件扩展名
+watch.exclude.files=.log;.tmp;.wal;.journal;.cache
+
 # 活动分组时间窗口（分钟）
-aggregate.gap.minutes=15
+aggregate.gap.minutes=5
+
+# 原始事件保留天数（0 = 永久保留）
+retention.file_event.days=90
 ```
 
 ### 使用方法
@@ -122,7 +110,7 @@ aggregate.gap.minutes=15
 2. 点击侧边栏的 **开始追踪**
 3. 正常工作——写、编辑、下载、分享
 4. 点击 **停止追踪**，查看你的活动时间线
-5. 点击任意活动块，探索涉及的文件
+5. 点击任意工作会话，探索活动块和文件
 
 WorkTrace 在你忘记它存在的时候效果最好。
 
@@ -130,61 +118,73 @@ WorkTrace 在你忘记它存在的时候效果最好。
 
 ```
 src/main/java/com/worktrace/
-├── app/                    # 应用入口
+├── app/                        # 应用入口
 │   └── WorkTraceApp.java
-├── collector/              # 活动采集层
-│   ├── FileWatcherService      # 文件观察接口
-│   ├── FileWatcherServiceImpl  # 递归目录监听实现
-│   ├── EventAggregator         # 缓冲事件 → 活动块管道
-│   └── CategoryClassifier      # 扩展名 → 类别映射
-├── database/               # 持久化层
-│   ├── DatabaseManager         # SQLite 连接单例
-│   ├── FileEventRepository     # file_event 表 CRUD
-│   ├── ActivityRepository      # activity_block 表 CRUD
-│   ├── ProjectRepository       # project_info 表 CRUD
-│   ├── PageResult              # 分页结果封装
-│   └── migration/              # 数据库版本迁移
-├── model/                  # 实体类
+├── collector/                  # 活动采集层
+│   ├── FileWatcherService          # WatchService 接口
+│   ├── FileWatcherServiceImpl      # 递归目录监听实现
+│   ├── EventAggregator             # 缓冲事件 → 活动块管道
+│   ├── EventWriteQueue             # 异步写入队列（5000 容量）
+│   ├── EventDebouncer              # 500ms 去抖
+│   ├── NoiseFilter                 # 文件级噪声过滤
+│   ├── CategoryClassifier          # 扩展名 → 类别映射
+│   └── ProjectDetector             # 项目自动识别
+├── database/                   # 持久化层
+│   ├── DatabaseManager             # SQLite 连接单例
+│   ├── FileEventRepository         # file_event 表 CRUD
+│   ├── ActivityRepository          # activity_block 表 CRUD
+│   ├── ProjectRepository           # project_info 表 CRUD
+│   ├── WorkSessionRepository       # work_session 表 CRUD
+│   ├── PageResult                  # 分页结果封装
+│   └── migration/                  # 数据库版本迁移（V1-V4）
+├── model/                      # 实体类
 │   ├── FileEvent
 │   ├── ActivityBlock
-│   └── ProjectInfo
-├── service/                # 业务服务接口
+│   ├── ProjectInfo
+│   └── WorkSession
+├── service/                    # 业务逻辑
 │   ├── TimelineService
+│   ├── WorkSessionService
 │   ├── ProjectService
 │   ├── StatisticsService
-│   └── impl/
-│       └── TimelineServiceImpl
-├── timeline/               # 聚合引擎
-│   ├── ActivityBlockGenerator  # 核心算法（单遍扫描）
-│   ├── AggregationContext      # 滑动窗口状态机
-│   └── MergeConfig             # 聚合参数配置
-├── ui/                     # JavaFX 表现层
-│   ├── controller/MainController
+│   ├── DataRetentionService        # 90 天数据生命周期
+│   └── impl/                       # 服务实现
+├── timeline/                   # 聚合引擎
+│   ├── ActivityBlockGenerator      # FileEvent → ActivityBlock
+│   ├── WorkSessionGenerator        # ActivityBlock → WorkSession
+│   ├── AggregationContext          # 滑动窗口状态机
+│   └── MergeConfig                 # 聚合参数配置
+├── ui/                         # JavaFX 表现层
+│   ├── controller/MainController   # 主界面控制器
 │   └── view/
-│       ├── ActivityBlockCell   # 时间线卡片单元格
-│       └── FileDetailCell      # 文件列表单元格
-└── util/                   # 工具类
-    ├── Config
-    └── LogUtil
+│       ├── WorkSessionCell         # 工作会话时间线卡片
+│       ├── ActivityBlockCell       # 活动块详情卡片
+│       ├── FileDetailCell          # 文件列表单元格
+│       └── ProjectStatsCell        # 项目统计单元格
+└── util/                       # 工具类
+    ├── Config                      # 配置管理器
+    └── LogUtil                     # 日志工具
 ```
 
 ## 数据流
 
 ```
-数字工作空间（文件、文档、项目）
+Windows 文件系统
        │
        ▼
-  NIO WatchService（后台观察）
+  NIO WatchService（后台线程）
+       │
+       ├── NoiseFilter 2.0      → 过滤系统噪声
+       ├── EventDebouncer       → 500ms 去抖
        │
        ▼
-  FileWatcherServiceImpl
+  EventWriteQueue.submit()       ← 非阻塞
        │
-       ├──→ FileEventRepository.insert()     → SQLite (file_event)
+       ▼（Writer 线程，每 100 条或每 1 秒刷盘）
        │
-       └──→ EventAggregator.accept()
-               │ 缓冲区（100 条事件）
-               ▼
-            flush()
+       ├── FileEventRepository.batchInsert()  → SQLite (file_event)
+       │
+       └── EventAggregator.acceptAll()
                │
                ▼
             ActivityBlockGenerator.generate()
@@ -192,35 +192,45 @@ src/main/java/com/worktrace/
                ▼
             ActivityRepository.batchInsert()  → SQLite (activity_block)
                │
-               ▼
-            TimelineService.getDailyTimeline()
+               ▼（每 30 秒刷新）
+            WorkSessionService.getDailySessions()
                │
                ▼
-            MainController.loadAllData()      → JavaFX UI
+            MainController（异步 Task）→ JavaFX UI
 ```
 
 ## 数据库
 
-三张表，本地存储在 `~/.worktrace/worktrace.db`：
+五张表，本地存储在 `~/.worktrace/worktrace.db`：
 
 | 表名             | 用途                                    |
 | ---------------- | --------------------------------------- |
-| `file_event`     | 原始活动事件（CREATE / MODIFY / DELETE）|
-| `activity_block` | 分组后的工作时段，包含时间范围和类别    |
+| `file_event`     | 原始文件系统事件（CREATE / MODIFY / DELETE）|
+| `activity_block` | 分组后的活动块，包含时间范围和类别      |
 | `project_info`   | 已识别的项目根目录                      |
+| `work_session`   | 高层工作会话（30 分钟聚合）             |
+| `schema_version` | 迁移版本追踪                            |
 
-去重机制：`UNIQUE(start_time, end_time, category)` 约束防止重复插入活动记录。
+**生命周期：** `file_event` 记录在 90 天后自动过期删除。`activity_block`、`work_session`、`project_info` 永久保留。
 
-## 未来方向
+## 路线图
 
-- [ ] **噪声过滤** — 忽略系统文件、缓存和临时产物
-- [ ] **项目识别** — 从 .git、pom.xml、package.json 自动检测项目
-- [ ] **历史浏览** — 日期选择器，探索任何过去一天的时间线
-- [ ] **效率洞察** — 了解时间如何在项目和活动之间分配
-- [ ] **跨日模式** — 发现重复的工作节奏和专注时段
-- [ ] **系统托盘模式** — 在后台安静运行，持续记录
-- [ ] **AI 工作摘要** — 从活动数据自动生成每日和每周报告
-- [ ] **导出与分享** — 将时间线导出为 Markdown、CSV 或 JSON
+- [x] 基于 WatchService 的递归目录监听
+- [x] 智能噪声过滤（5 层：目录、扩展名、关键词、随机文件名、临时前缀）
+- [x] 事件去抖（500ms 窗口）
+- [x] 异步写入队列（与 WatchService 线程解耦）
+- [x] 活动块聚合（15 分钟窗口）
+- [x] 工作会话聚合（30 分钟窗口）
+- [x] 项目自动识别（15 种标志文件）
+- [x] 历史日期浏览（日期选择器 + 快捷按钮）
+- [x] 数据生命周期管理（90 天保留策略）
+- [x] 暗色主题 UI + 三栏可拖拽布局
+- [x] 文件打开 / 打开所在目录
+- [ ] 系统托盘后台运行
+- [ ] AI 驱动的每日工作报告
+- [ ] 生产力洞察与时间分配分析
+- [ ] 跨日工作模式发现
+- [ ] 数据导出（Markdown / CSV / JSON）
 
 ## 开源协议
 

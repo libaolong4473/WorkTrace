@@ -14,16 +14,14 @@ WorkTrace can.
 
 ## What It Does
 
-WorkTrace runs quietly in the background, observing how files are created, modified, and deleted across your digital workspace. It then aggregates thousands of low-level file events into meaningful activity blocks — human-readable records of your actual work sessions.
+WorkTrace runs quietly in the background, observing how files are created, modified, and deleted across your digital workspace. It then aggregates thousands of low-level file events into meaningful **work sessions** — human-readable records of your actual work.
 
 Instead of seeing 47 individual file saves, you see this:
 
 ```
-09:01 - 09:35  │  Software Development  │  WorkTraceApp.java +5 files
-10:05 - 10:20  │  Document Editing      │  Research Proposal.docx
-10:30 - 10:50  │  Image Processing      │  Screenshot_2026.png +3 files
-14:10 - 14:30  │  File Downloads        │  Interview_Guide.pdf +2 files
-15:00 - 15:25  │  Team Collaboration    │  Shared Documents Updated
+09:00 - 10:00  │  WorkTrace Development  │  5 activity blocks · 12 files · 60 min
+10:30 - 10:55  │  Document Editing       │  2 activity blocks · 3 files  · 25 min
+14:00 - 14:15  │  OtherApp Development   │  1 activity block  · 4 files  · 15 min
 ```
 
 This is not file search. This is not filesystem inspection. This is **digital memory** — a passive, permanent record of your work life.
@@ -38,40 +36,21 @@ It is a **passive digital archive** of your daily activity. You don't need to lo
 
 Think of it as **git log for your entire machine**, not just code repositories. Months later, you can pull up any date and see exactly what files you worked on, which projects consumed your time, and what kinds of activities filled your day.
 
-## Example Timeline
-
-A realistic day through WorkTrace's eyes:
-
-```
-09:01 - 09:35  │  Software Development  │  WorkTraceApp.java +5 files
-10:05 - 10:20  │  Document Editing      │  Research Proposal.docx
-10:30 - 10:50  │  Image Processing      │  Screenshot_2026.png +3 files
-11:00 - 11:45  │  Software Development  │  MainController.java +8 files
-14:10 - 14:30  │  File Downloads        │  Interview_Guide.pdf +2 files
-15:00 - 15:25  │  Team Collaboration    │  Shared Documents Updated
-15:30 - 16:10  │  Configuration         │  pom.xml +3 files
-16:20 - 17:00  │  Document Editing      │  Meeting Notes.md +2 files
-```
-
-Every block tells a story. No manual input required.
-
-## Vision
-
-WorkTrace's long-term goal is to transform raw digital activity into a **searchable personal work history**.
-
-Today, it captures file-level events and groups them into activity blocks. Tomorrow, it will understand projects, recognize patterns, and surface insights about how you actually spend your time.
-
-The ultimate vision: **a personal knowledge system that remembers everything you did on your computer**, so you never have to wonder "what was I working on?" again.
-
 ## Features
 
+- **Work Session aggregation** — groups activity blocks into meaningful work sessions (30-min window)
 - **Automatic activity tracking** — works silently in the background, no manual input needed
-- **Smart event aggregation** — groups related file events into meaningful activity blocks
-- **Category classification** — automatically recognizes code, documents, images, videos, and configuration files
-- **Project-aware grouping** — files from the same project merge together regardless of type
-- **Persistent history** — all activity stored locally in SQLite, always available for review
-- **Dark theme UI** — clean, modern interface with timeline, detail panel, and category breakdown
-- **Real-time updates** — timeline refreshes automatically while tracking is active
+- **Smart event aggregation** — groups related file events into activity blocks (15-min window)
+- **Category classification** — automatically recognizes code, documents, images, videos, and config files
+- **Project recognition** — auto-detects projects from .git, pom.xml, package.json, and 12 more markers
+- **Noise filtering** — filters system files, caches, temp files, random filenames, and app-specific noise
+- **Event debouncing** — 500ms debounce eliminates 80% of duplicate IDE save events
+- **Historical browsing** — date picker + quick buttons (today / yesterday / 7 days / 30 days)
+- **Async write queue** — high-performance ArrayBlockingQueue decouples file watching from DB writes
+- **Data lifecycle** — automatic 90-day retention for raw events, permanent storage for sessions
+- **Persistent history** — all activity stored locally in SQLite with WAL mode
+- **Dark theme UI** — IntelliJ IDEA-style interface with resizable three-panel layout
+- **File operations** — open files or containing directory from the detail panel
 
 ## Tech Stack
 
@@ -106,14 +85,23 @@ mvn clean javafx:run
 
 ### Configuration
 
-Edit `~/.worktrace/config.properties` to choose which directories to track:
+Edit `~/.worktrace/config.properties` to customize:
 
 ```properties
 # Directories to observe (semicolon-separated)
 watch.dirs=C:\Users\you\Desktop;C:\Users\you\Documents;D:\projects
 
+# Directories to exclude
+watch.exclude.dirs=.git;node_modules;target;.idea;LarkCache;WXWork
+
+# File extensions to exclude
+watch.exclude.files=.log;.tmp;.wal;.journal;.cache
+
 # Activity grouping window in minutes
-aggregate.gap.minutes=15
+aggregate.gap.minutes=5
+
+# Raw event retention days (0 = keep forever)
+retention.file_event.days=90
 ```
 
 ### Usage
@@ -122,7 +110,7 @@ aggregate.gap.minutes=15
 2. Click **Start Tracking** in the sidebar
 3. Go about your normal work — write, edit, download, share
 4. Click **Stop Tracking** to see your activity timeline
-5. Click any block to explore the files involved
+5. Click any work session to explore activity blocks and files
 
 WorkTrace works best when you forget it's running.
 
@@ -130,61 +118,73 @@ WorkTrace works best when you forget it's running.
 
 ```
 src/main/java/com/worktrace/
-├── app/                    # Application entry point
+├── app/                        # Application entry point
 │   └── WorkTraceApp.java
-├── collector/              # Activity collection layer
-│   ├── FileWatcherService      # File observation interface
-│   ├── FileWatcherServiceImpl  # Recursive directory monitoring
-│   ├── EventAggregator         # Buffered event → activity block pipeline
-│   └── CategoryClassifier      # Extension → category mapping
-├── database/               # Persistence layer
-│   ├── DatabaseManager         # SQLite connection singleton
-│   ├── FileEventRepository     # file_event table CRUD
-│   ├── ActivityRepository      # activity_block table CRUD
-│   ├── ProjectRepository       # project_info table CRUD
-│   ├── PageResult              # Pagination wrapper
-│   └── migration/              # Schema versioning
-├── model/                  # Entity classes
+├── collector/                  # Activity collection layer
+│   ├── FileWatcherService          # WatchService interface
+│   ├── FileWatcherServiceImpl      # Recursive directory monitoring
+│   ├── EventAggregator             # Buffered event → activity block pipeline
+│   ├── EventWriteQueue             # Async write queue (5000 capacity)
+│   ├── EventDebouncer              # 500ms debounce for duplicate events
+│   ├── NoiseFilter                 # File-level noise filtering
+│   ├── CategoryClassifier          # Extension → category mapping
+│   └── ProjectDetector             # Auto project recognition
+├── database/                   # Persistence layer
+│   ├── DatabaseManager             # SQLite connection singleton
+│   ├── FileEventRepository         # file_event table CRUD
+│   ├── ActivityRepository          # activity_block table CRUD
+│   ├── ProjectRepository           # project_info table CRUD
+│   ├── WorkSessionRepository       # work_session table CRUD
+│   ├── PageResult                  # Pagination wrapper
+│   └── migration/                  # Schema versioning (V1-V4)
+├── model/                      # Entity classes
 │   ├── FileEvent
 │   ├── ActivityBlock
-│   └── ProjectInfo
-├── service/                # Business logic interfaces
+│   ├── ProjectInfo
+│   └── WorkSession
+├── service/                    # Business logic
 │   ├── TimelineService
+│   ├── WorkSessionService
 │   ├── ProjectService
 │   ├── StatisticsService
-│   └── impl/
-│       └── TimelineServiceImpl
-├── timeline/               # Aggregation engine
-│   ├── ActivityBlockGenerator  # Core algorithm (single-pass scan)
-│   ├── AggregationContext      # Sliding window state machine
-│   └── MergeConfig             # Aggregation parameters
-├── ui/                     # JavaFX presentation layer
-│   ├── controller/MainController
+│   ├── DataRetentionService        # 90-day data lifecycle
+│   └── impl/                       # Service implementations
+├── timeline/                   # Aggregation engine
+│   ├── ActivityBlockGenerator      # FileEvent → ActivityBlock
+│   ├── WorkSessionGenerator        # ActivityBlock → WorkSession
+│   ├── AggregationContext          # Sliding window state machine
+│   └── MergeConfig                 # Aggregation parameters
+├── ui/                         # JavaFX presentation layer
+│   ├── controller/MainController   # Main UI controller
 │   └── view/
-│       ├── ActivityBlockCell   # Timeline card cell
-│       └── FileDetailCell      # File list cell
-└── util/                   # Utilities
-    ├── Config
-    └── LogUtil
+│       ├── WorkSessionCell         # WorkSession timeline card
+│       ├── ActivityBlockCell       # ActivityBlock detail card
+│       ├── FileDetailCell          # File list cell
+│       └── ProjectStatsCell        # Project statistics cell
+└── util/                       # Utilities
+    ├── Config                      # Configuration manager
+    └── LogUtil                     # Logging utility
 ```
 
 ## Data Flow
 
 ```
-Digital Workspace (files, documents, projects)
+Windows File System
        │
        ▼
-  NIO WatchService (background observation)
+  NIO WatchService (background thread)
+       │
+       ├── NoiseFilter 2.0      → filter system noise
+       ├── EventDebouncer       → 500ms debounce
        │
        ▼
-  FileWatcherServiceImpl
+  EventWriteQueue.submit()       ← non-blocking
        │
-       ├──→ FileEventRepository.insert()     → SQLite (file_event)
+       ▼ (Writer Thread, batch 100 or 1s interval)
        │
-       └──→ EventAggregator.accept()
-               │ buffer (100 events)
-               ▼
-            flush()
+       ├── FileEventRepository.batchInsert()  → SQLite (file_event)
+       │
+       └── EventAggregator.acceptAll()
                │
                ▼
             ActivityBlockGenerator.generate()
@@ -192,35 +192,45 @@ Digital Workspace (files, documents, projects)
                ▼
             ActivityRepository.batchInsert()  → SQLite (activity_block)
                │
-               ▼
-            TimelineService.getDailyTimeline()
+               ▼ (30s refresh)
+            WorkSessionService.getDailySessions()
                │
                ▼
-            MainController.loadAllData()      → JavaFX UI
+            MainController (async Task) → JavaFX UI
 ```
 
 ## Database
 
-Three tables, stored locally at `~/.worktrace/worktrace.db`:
+Five tables, stored locally at `~/.worktrace/worktrace.db`:
 
-| Table            | Purpose                                              |
-| ---------------- | ---------------------------------------------------- |
-| `file_event`     | Raw activity events (CREATE / MODIFY / DELETE)       |
-| `activity_block` | Grouped work sessions with time range and category   |
-| `project_info`   | Recognized project root paths                        |
+| Table            | Purpose                                          |
+| ---------------- | ------------------------------------------------ |
+| `file_event`     | Raw file system events (CREATE / MODIFY / DELETE)|
+| `activity_block` | Grouped events with time range and category      |
+| `project_info`   | Recognized project root paths                    |
+| `work_session`   | High-level work sessions (30-min aggregation)    |
+| `schema_version` | Migration version tracking                       |
 
-Deduplication: `UNIQUE(start_time, end_time, category)` prevents duplicate activity records.
+**Lifecycle:** `file_event` records auto-expire after 90 days. `activity_block`, `work_session`, and `project_info` are kept permanently.
 
-## Future Direction
+## Roadmap
 
-- [ ] **Noise filtering** — ignore system files, caches, and temporary artifacts
-- [ ] **Project recognition** — auto-detect projects from .git, pom.xml, package.json
-- [ ] **Historical browsing** — date picker to explore any past day's timeline
-- [ ] **Productivity insights** — understand how time is distributed across projects and activities
-- [ ] **Cross-day patterns** — discover recurring work rhythms and focus periods
-- [ ] **System tray mode** — run silently in the background, always recording
-- [ ] **AI-generated work summaries** — automatically produce daily and weekly reports from activity data
-- [ ] **Export and sharing** — export timelines as markdown, CSV, or JSON
+- [x] File monitoring with recursive directory watching
+- [x] Smart noise filtering (5-layer: directory, extension, keyword, random name, temp prefix)
+- [x] Event debouncing (500ms window)
+- [x] Async write queue (decoupled from WatchService thread)
+- [x] Activity block aggregation (15-min window)
+- [x] Work session aggregation (30-min window)
+- [x] Project auto-detection (15 marker files)
+- [x] Historical date browsing (date picker + quick buttons)
+- [x] Data lifecycle management (90-day retention)
+- [x] Dark theme UI with resizable panels
+- [x] File open / open containing directory
+- [ ] System tray background mode
+- [ ] AI-generated daily work reports
+- [ ] Productivity insights and time distribution
+- [ ] Cross-day pattern discovery
+- [ ] Export (Markdown / CSV / JSON)
 
 ## License
 

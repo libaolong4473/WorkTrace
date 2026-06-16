@@ -8,6 +8,7 @@ target/
 .settings/
 .classpath
 .project
+.trae/
 
 # OS
 Thumbs.db
