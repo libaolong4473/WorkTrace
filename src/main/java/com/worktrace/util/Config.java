@@ -37,8 +37,11 @@ public class Config {
     private void load() {
         // 加载默认值
         props.setProperty("watch.dirs",           System.getProperty("user.home") + "\\Desktop;" +
-                                                  System.getProperty("user.home") + "\\Documents");
-        props.setProperty("watch.exclude.dirs",   ".git;.idea;node_modules;target;build;dist;out;.cache;__pycache__;ShaderCache;.vscode;.gradle;.worktrace;Thumbs.db");
+                                                  System.getProperty("user.home") + "\\Documents;" +
+                                                  "E:\\opc\\WorkTrace;" +
+                                                  "E:\\luolingbanyu_shopping");
+        props.setProperty("watch.exclude.dirs",   ".git;.idea;node_modules;target;build;dist;out;.cache;__pycache__;ShaderCache;.vscode;.gradle;.worktrace;Thumbs.db;" +
+                                                  "LarkCache;WeChat Files;WXWork;DingTalk;OneDrive");
         props.setProperty("watch.exclude.files",  ".log;.tmp;.wal;.journal;.ldb;.lock;.part;.download;.swp;.bak;.cache;.temp;.db-wal;.db-shm");
         props.setProperty("aggregate.gap.minutes", "5");
         props.setProperty("db.path",              CONFIG_DIR.resolve("worktrace.db").toString());

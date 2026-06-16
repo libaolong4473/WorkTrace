@@ -2,6 +2,7 @@ package com.worktrace.app;
 
 import com.worktrace.collector.CategoryClassifier;
 import com.worktrace.collector.EventAggregator;
+import com.worktrace.collector.EventWriteQueue;
 import com.worktrace.collector.FileWatcherService;
 import com.worktrace.collector.FileWatcherServiceImpl;
 import com.worktrace.collector.ProjectDetector;
@@ -58,6 +59,7 @@ public class WorkTraceApp extends Application {
 
     private FileWatcherService watcherService;
     private EventAggregator aggregator;
+    private EventWriteQueue writeQueue;
 
     @Override
     public void start(Stage primaryStage) throws Exception {
@@ -99,9 +101,12 @@ public class WorkTraceApp extends Application {
             }
         );
 
+        // 异步写入队列：解耦 WatchService 和 SQLite 写入
+        writeQueue = new EventWriteQueue(fileEventRepo, aggregator);
+
         watcherService = new FileWatcherServiceImpl();
 
-        // 监听回调：双写 — 原始事件 + 聚合器
+        // 监听回调：只做事件构建 + 入队（零阻塞）
         watcherService.addEventListener((eventType, filePath, size) -> {
             FileEvent event = new FileEvent();
             event.setEventType(eventType);
@@ -111,13 +116,7 @@ public class WorkTraceApp extends Application {
             event.setSize(size);
             event.setEventTime(LocalDateTime.now());
 
-            try {
-                fileEventRepo.insert(event);
-            } catch (Exception e) {
-                LogUtil.error("保存文件事件失败: " + e.getMessage());
-            }
-
-            aggregator.accept(event);
+            writeQueue.submit(event);
         });
 
         // 5. 业务服务层
@@ -139,13 +138,15 @@ public class WorkTraceApp extends Application {
         controller.setOnStopCallback(this::stopWatching);
 
         // 8. 显示窗口（UI 立即出现）
-        Scene scene = new Scene(root, 960, 640);
+        Scene scene = new Scene(root, 1280, 800);
         primaryStage.setTitle("WorkTrace - 个人工作轨迹");
         primaryStage.setScene(scene);
+        primaryStage.setMaximized(true);
         primaryStage.show();
         LogUtil.info("UI 已显示");
 
-        // 9. 异步启动监听（不阻塞 UI，目录注册在后台线程进行）
+        // 9. 启动写入队列 + 异步启动监听
+        writeQueue.start();
         List<Path> watchDirs = parseWatchDirs(config.getString("watch.dirs"));
         watcherService.watchDirectories(watchDirs);
         watcherService.start();
@@ -160,18 +161,17 @@ public class WorkTraceApp extends Application {
     }
 
     /**
-     * 停止监听并刷新聚合器。
-     * 由 MainController 的"停止监听"按钮调用。
-     * 顺序：先停 WatchService → 再 flush 缓冲区 → 事件不丢失。
+     * 停止监听并刷新队列 + 聚合器。
+     * 顺序：先停 WatchService → 再停写入队列(含 drain) → 事件不丢失。
      */
     public void stopWatching() {
         if (watcherService != null) {
             watcherService.stop();
         }
-        if (aggregator != null) {
-            aggregator.flush();
-            LogUtil.info("聚合器缓冲区已刷新");
+        if (writeQueue != null) {
+            writeQueue.stop(); // 内部会 drain 剩余事件 + flush 聚合器
         }
+        LogUtil.info("采集层已停止");
     }
 
     /**

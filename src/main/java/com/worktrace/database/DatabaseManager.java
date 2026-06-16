@@ -1,5 +1,7 @@
 package com.worktrace.database;
 
+import com.worktrace.util.LogUtil;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -31,7 +33,8 @@ public class DatabaseManager {
     }
 
     /**
-     * 初始化数据库：创建目录 → 打开连接 → 执行 schema.sql。
+     * 初始化数据库：创建目录 → 打开连接 → 设置 PRAGMA。
+     * 建表由 DatabaseMigration 统一管理，不再依赖 schema.sql 解析。
      */
     public void initialize() throws SQLException, java.io.IOException {
         Files.createDirectories(Path.of(DB_DIR));
@@ -40,7 +43,7 @@ public class DatabaseManager {
             stmt.execute("PRAGMA journal_mode=WAL");
             stmt.execute("PRAGMA foreign_keys=ON");
         }
-        runSchemaScript();
+        LogUtil.info("数据库连接已建立: " + DB_URL);
     }
 
     public Connection getConnection() {
@@ -53,28 +56,4 @@ public class DatabaseManager {
         }
     }
 
-    private void runSchemaScript() throws SQLException, java.io.IOException {
-        var stream = ClassLoader.getSystemResourceAsStream("sql/schema.sql");
-        if (stream == null) {
-            // 备选：从模块资源读取
-            stream = getClass().getModule().getResourceAsStream("sql/schema.sql");
-        }
-        if (stream == null) {
-            throw new java.io.IOException("找不到资源 sql/schema.sql，请检查 src/main/resources/sql/schema.sql 是否存在");
-        }
-        String sql = new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        // 去掉 BOM 头(UTF-8 编辑器可能写入)
-        if (sql.startsWith("﻿")) {
-            sql = sql.substring(1);
-        }
-        try (Statement stmt = connection.createStatement()) {
-            for (String s : sql.split(";")) {
-                // 去除行注释和空白
-                String cleaned = s.replaceAll("--.*", "").trim();
-                if (!cleaned.isEmpty()) {
-                    stmt.execute(cleaned);
-                }
-            }
-        }
-    }
 }

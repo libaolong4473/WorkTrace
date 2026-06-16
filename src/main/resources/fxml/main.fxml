@@ -7,7 +7,7 @@
 <BorderPane xmlns:fx="http://javafx.com/fxml"
             fx:id="rootPane"
             fx:controller="com.worktrace.ui.controller.MainController"
-            prefWidth="1100" prefHeight="680"
+            prefWidth="1280" prefHeight="800"
             stylesheets="@../css/style.css">
 
     <!-- ==================== TOP: 状态栏 ==================== -->
@@ -22,116 +22,115 @@
         </HBox>
     </top>
 
-    <!-- ==================== LEFT: 侧边栏 ==================== -->
-    <left>
-        <VBox styleClass="sidebar" prefWidth="200" spacing="4">
-            <padding><Insets top="8" bottom="8"/></padding>
+    <!-- ==================== CENTER: SplitPane(左+中+右) ==================== -->
+    <center>
+        <SplitPane fx:id="mainSplitPane" dividerPositions="0.18, 0.75">
 
-            <Label text="工作轨迹" styleClass="sidebar-title"/>
+            <!-- ===== LEFT: 侧边栏 ===== -->
+            <VBox styleClass="sidebar" minWidth="180" spacing="4">
+                <padding><Insets top="8" bottom="8"/></padding>
 
-            <!-- 今日概览卡片 -->
-            <VBox styleClass="sidebar-summary" spacing="6">
-                <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
-                <Label text="今日活动" styleClass="summary-title"/>
-                <HBox spacing="12" alignment="CENTER_LEFT">
-                    <VBox>
-                        <Label fx:id="lblBlockCount" text="0" styleClass="summary-value"/>
-                        <Label text="活动块" styleClass="summary-sub"/>
-                    </VBox>
-                    <VBox>
-                        <Label fx:id="lblActiveMinutes" text="0" styleClass="summary-value"/>
-                        <Label text="分钟" styleClass="summary-sub"/>
-                    </VBox>
-                </HBox>
+                <Label text="工作轨迹" styleClass="sidebar-title"/>
+
+                <!-- 今日概览卡片 -->
+                <VBox styleClass="sidebar-summary" spacing="6">
+                    <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
+                    <Label text="今日活动" styleClass="summary-title"/>
+                    <HBox spacing="12" alignment="CENTER_LEFT">
+                        <VBox>
+                            <Label fx:id="lblBlockCount" text="0" styleClass="summary-value"/>
+                            <Label text="会话" styleClass="summary-sub"/>
+                        </VBox>
+                        <VBox>
+                            <Label fx:id="lblActiveMinutes" text="0" styleClass="summary-value"/>
+                            <Label text="分钟" styleClass="summary-sub"/>
+                        </VBox>
+                    </HBox>
+                    <Separator styleClass="sidebar-divider" maxWidth="Infinity"/>
+                    <Label text="类别分布" styleClass="summary-title"/>
+                    <HBox spacing="6" alignment="CENTER_LEFT">
+                        <Label text="🟢 代码" styleClass="summary-sub"/>
+                        <Label fx:id="lblCatCode" text="0 分钟" styleClass="summary-sub"/>
+                    </HBox>
+                    <HBox spacing="6" alignment="CENTER_LEFT">
+                        <Label text="🔵 文档" styleClass="summary-sub"/>
+                        <Label fx:id="lblCatDocument" text="0 分钟" styleClass="summary-sub"/>
+                    </HBox>
+                    <HBox spacing="6" alignment="CENTER_LEFT">
+                        <Label text="🟠 图片" styleClass="summary-sub"/>
+                        <Label fx:id="lblCatImage" text="0 分钟" styleClass="summary-sub"/>
+                    </HBox>
+                    <HBox spacing="6" alignment="CENTER_LEFT">
+                        <Label text="🟣 音视频" styleClass="summary-sub"/>
+                        <Label fx:id="lblCatVideo" text="0 分钟" styleClass="summary-sub"/>
+                    </HBox>
+                    <HBox spacing="6" alignment="CENTER_LEFT">
+                        <Label text="🟡 配置" styleClass="summary-sub"/>
+                        <Label fx:id="lblCatConfig" text="0 分钟" styleClass="summary-sub"/>
+                    </HBox>
+                </VBox>
+
+                <Region VBox.vgrow="ALWAYS"/>
+
+                <!-- 导航按钮 -->
+                <Label text="导航" styleClass="sidebar-title"/>
+                <Button fx:id="btnOverview"  text="📊  今日概览" styleClass="nav-button nav-button-active" maxWidth="Infinity"/>
+                <Button fx:id="btnTimeline"  text="📋  时间线"   styleClass="nav-button" maxWidth="Infinity"/>
+                <Button fx:id="btnProjects"  text="📁  项目统计" styleClass="nav-button" maxWidth="Infinity"/>
+
+                <Region VBox.vgrow="ALWAYS"/>
+
+                <!-- 监听控制 -->
                 <Separator styleClass="sidebar-divider" maxWidth="Infinity"/>
-                <Label text="类别分布" styleClass="summary-title"/>
-                <HBox spacing="6" alignment="CENTER_LEFT">
-                    <Label text="🟢 代码" styleClass="summary-sub"/>
-                    <Label fx:id="lblCatCode" text="0 分钟" styleClass="summary-sub"/>
-                </HBox>
-                <HBox spacing="6" alignment="CENTER_LEFT">
-                    <Label text="🔵 文档" styleClass="summary-sub"/>
-                    <Label fx:id="lblCatDocument" text="0 分钟" styleClass="summary-sub"/>
-                </HBox>
-                <HBox spacing="6" alignment="CENTER_LEFT">
-                    <Label text="🟠 图片" styleClass="summary-sub"/>
-                    <Label fx:id="lblCatImage" text="0 分钟" styleClass="summary-sub"/>
-                </HBox>
-                <HBox spacing="6" alignment="CENTER_LEFT">
-                    <Label text="🟣 音视频" styleClass="summary-sub"/>
-                    <Label fx:id="lblCatVideo" text="0 分钟" styleClass="summary-sub"/>
-                </HBox>
-                <HBox spacing="6" alignment="CENTER_LEFT">
-                    <Label text="🟡 配置" styleClass="summary-sub"/>
-                    <Label fx:id="lblCatConfig" text="0 分钟" styleClass="summary-sub"/>
-                </HBox>
+                <Button fx:id="btnToggleWatch" text="▶  开始监听" styleClass="nav-button" maxWidth="Infinity"/>
             </VBox>
 
-            <Region VBox.vgrow="ALWAYS"/>
+            <!-- ===== CENTER: 时间线 ===== -->
+            <VBox fx:id="timelinePanel" styleClass="timeline-panel" spacing="8" minWidth="400">
+                <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
 
-            <!-- 导航按钮 -->
-            <Label text="导航" styleClass="sidebar-title"/>
+                <!-- 日期选择 + 快捷按钮（FlowPane 自动换行） -->
+                <FlowPane spacing="6" alignment="CENTER_LEFT">
+                    <Label fx:id="lblTimelineTitle" text="今日时间线" styleClass="timeline-header"/>
+                    <Region prefWidth="12"/>
+                    <Button fx:id="btnToday"     text="今天"    styleClass="date-quick-btn" />
+                    <Button fx:id="btnYesterday"  text="昨天"    styleClass="date-quick-btn" />
+                    <Button fx:id="btnLast7Days"  text="7天"     styleClass="date-quick-btn" />
+                    <Button fx:id="btnLast30Days" text="30天"    styleClass="date-quick-btn" />
+                    <DatePicker fx:id="datePicker" styleClass="date-picker"/>
+                </FlowPane>
 
-            <Button fx:id="btnOverview"  text="📊  今日概览" styleClass="nav-button nav-button-active" maxWidth="Infinity"/>
-            <Button fx:id="btnTimeline"  text="📋  时间线"   styleClass="nav-button" maxWidth="Infinity"/>
-            <Button fx:id="btnProjects"  text="📁  项目统计" styleClass="nav-button" maxWidth="Infinity"/>
+                <ListView fx:id="timelineList" styleClass="timeline-list" VBox.vgrow="ALWAYS"/>
+            </VBox>
 
-            <Region VBox.vgrow="ALWAYS"/>
+            <!-- ===== RIGHT: 详情面板 ===== -->
+            <VBox fx:id="detailPanel" styleClass="detail-panel" minWidth="240" spacing="8">
+                <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
 
-            <!-- 监听控制 -->
-            <Separator styleClass="sidebar-divider" maxWidth="Infinity"/>
-            <Button fx:id="btnToggleWatch" text="▶  开始监听" styleClass="nav-button" maxWidth="Infinity"/>
-        </VBox>
-    </left>
+                <Label fx:id="lblDetailTitle" text="工作会话详情" styleClass="detail-header"/>
+                <Label fx:id="lblDetailTime" text="选择一个工作会话查看详情" styleClass="detail-time"/>
 
-    <!-- ==================== CENTER: 时间线 ==================== -->
-    <center>
-        <VBox fx:id="timelinePanel" styleClass="timeline-panel" spacing="8">
-            <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
+                <!-- 统计卡片区域 -->
+                <HBox fx:id="detailStatsBox" spacing="8">
+                    <VBox styleClass="detail-stat-card" alignment="CENTER" spacing="2" HBox.hgrow="ALWAYS">
+                        <Label fx:id="lblDetailDuration" text="0" styleClass="detail-stat-value"/>
+                        <Label text="分钟" styleClass="detail-stat-label"/>
+                    </VBox>
+                    <VBox styleClass="detail-stat-card" alignment="CENTER" spacing="2" HBox.hgrow="ALWAYS">
+                        <Label fx:id="lblDetailFiles" text="0" styleClass="detail-stat-value"/>
+                        <Label text="文件" styleClass="detail-stat-label"/>
+                    </VBox>
+                </HBox>
 
-            <!-- 日期选择 + 快捷按钮 -->
-            <HBox spacing="8" alignment="CENTER_LEFT">
-                <Label fx:id="lblTimelineTitle" text="今日时间线" styleClass="timeline-header"/>
-                <Region HBox.hgrow="ALWAYS"/>
-                <Button fx:id="btnToday"     text="今天"     styleClass="date-quick-btn" />
-                <Button fx:id="btnYesterday"  text="昨天"     styleClass="date-quick-btn" />
-                <Button fx:id="btnLast7Days"  text="最近7天"  styleClass="date-quick-btn" />
-                <Button fx:id="btnLast30Days" text="最近30天" styleClass="date-quick-btn" />
-                <DatePicker fx:id="datePicker" styleClass="date-picker"/>
-            </HBox>
+                <Separator styleClass="sidebar-divider" maxWidth="Infinity"/>
 
-            <ListView fx:id="timelineList" styleClass="timeline-list" VBox.vgrow="ALWAYS"/>
-        </VBox>
+                <Label text="活动块" styleClass="detail-section-title"/>
+
+                <ListView fx:id="detailBlockList" VBox.vgrow="ALWAYS" styleClass="timeline-list"/>
+            </VBox>
+
+        </SplitPane>
     </center>
-
-    <!-- ==================== RIGHT: 详情面板 ==================== -->
-    <right>
-        <VBox fx:id="detailPanel" styleClass="detail-panel" prefWidth="280" spacing="8">
-            <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
-
-            <Label fx:id="lblDetailTitle" text="工作会话详情" styleClass="detail-header"/>
-
-            <Label fx:id="lblDetailTime" text="选择一个工作会话查看详情" styleClass="detail-time"/>
-
-            <!-- 统计卡片区域 -->
-            <HBox fx:id="detailStatsBox" spacing="8">
-                <VBox styleClass="detail-stat-card" alignment="CENTER" spacing="2" HBox.hgrow="ALWAYS">
-                    <Label fx:id="lblDetailDuration" text="0" styleClass="detail-stat-value"/>
-                    <Label text="分钟" styleClass="detail-stat-label"/>
-                </VBox>
-                <VBox styleClass="detail-stat-card" alignment="CENTER" spacing="2" HBox.hgrow="ALWAYS">
-                    <Label fx:id="lblDetailFiles" text="0" styleClass="detail-stat-value"/>
-                    <Label text="文件" styleClass="detail-stat-label"/>
-                </VBox>
-            </HBox>
-
-            <Separator styleClass="sidebar-divider" maxWidth="Infinity"/>
-
-            <Label text="活动块" styleClass="detail-section-title"/>
-
-            <ListView fx:id="detailBlockList" VBox.vgrow="ALWAYS" styleClass="timeline-list"/>
-        </VBox>
-    </right>
 
     <!-- ==================== BOTTOM: 状态栏 ==================== -->
     <bottom>

@@ -97,7 +97,7 @@ public class ActivityRepository {
      */
     public List<ActivityBlock> findByDate(LocalDate date) throws SQLException {
         String sql = """
-            SELECT id, start_time, end_time, category, summary
+            SELECT id, start_time, end_time, category, summary, project_name
             FROM activity_block
             WHERE start_time >= ? AND start_time < ?
             ORDER BY start_time ASC
@@ -117,7 +117,7 @@ public class ActivityRepository {
      */
     public List<ActivityBlock> findRecentDays(int days) throws SQLException {
         String sql = """
-            SELECT id, start_time, end_time, category, summary
+            SELECT id, start_time, end_time, category, summary, project_name
             FROM activity_block
             WHERE start_time >= ? AND start_time < ?
             ORDER BY start_time ASC
@@ -133,7 +133,7 @@ public class ActivityRepository {
      */
     public List<ActivityBlock> findOverlapping(LocalDateTime from, LocalDateTime to) throws SQLException {
         String sql = """
-            SELECT id, start_time, end_time, category, summary
+            SELECT id, start_time, end_time, category, summary, project_name
             FROM activity_block
             WHERE start_time < ? AND end_time > ?
             ORDER BY start_time ASC
@@ -166,7 +166,7 @@ public class ActivityRepository {
             WHERE start_time >= ? AND start_time < ?
             """;
         String dataSql = """
-            SELECT id, start_time, end_time, category, summary
+            SELECT id, start_time, end_time, category, summary, project_name
             FROM activity_block
             WHERE start_time >= ? AND start_time < ?
             ORDER BY start_time ASC

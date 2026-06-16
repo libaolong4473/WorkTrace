@@ -22,6 +22,7 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.*;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.*;
 import javafx.scene.Scene;
 import javafx.util.Duration;
@@ -285,44 +286,67 @@ public class MainController implements Initializable {
         }
     }
 
-    // ==================== 数据加载 ====================
+    // ==================== 数据加载（异步） ====================
 
     /**
-     * 加载全部数据：WorkSession 时间线 + 类别统计 + 概览数字。
+     * 异步加载全部数据：WorkSession + 类别统计。
+     * 数据库查询在后台线程执行，UI 更新通过 Platform.runLater 回调。
      */
     private void loadAllData() {
-        // 1. 加载 WorkSession 列表
-        if (workSessionService != null) {
-            List<WorkSession> sessions = workSessionService.getDailySessions(selectedDate);
-            sessionData.setAll(sessions);
+        LocalDate date = selectedDate;
 
-            if (!sessions.isEmpty()) {
-                timelineList.getSelectionModel().selectFirst();
+        javafx.concurrent.Task<Void> task = new javafx.concurrent.Task<>() {
+            @Override
+            protected Void call() {
+                // 后台线程：查询数据
+                List<WorkSession> sessions = List.of();
+                Map<String, Long> catDuration = Map.of();
+
+                if (workSessionService != null) {
+                    sessions = workSessionService.getDailySessions(date);
+                }
+                if (timelineService != null) {
+                    catDuration = timelineService.getCategoryDuration(date);
+                }
+
+                // 回调 UI 线程
+                final List<WorkSession> finalSessions = sessions;
+                final Map<String, Long> finalCatDuration = catDuration;
+                Platform.runLater(() -> updateUI(finalSessions, finalCatDuration, date));
+                return null;
             }
+        };
+        new Thread(task).start();
+    }
 
-            // 概览数字
-            long totalMinutes = sessions.stream().mapToLong(WorkSession::getDurationMinutes).sum();
-
-            lblBlockCount.setText(String.valueOf(sessions.size()));
-            lblActiveMinutes.setText(String.valueOf(totalMinutes));
-
-            // 标题：今天显示"今日"，其他日期显示具体日期
-            String dateLabel = selectedDate.equals(LocalDate.now()) ? "今日" : selectedDate.toString();
-            lblTimelineTitle.setText(dateLabel + "工作会话");
-            lblEventCount.setText(dateLabel + ": " + sessions.size() + " 个工作会话 / " + totalMinutes + " 分钟");
-
-            lblStatusText.setText("已加载 " + sessions.size() + " 个工作会话 · " + selectedDate.format(DATE_FMT));
+    /**
+     * 在 JavaFX 线程上更新 UI 控件。
+     */
+    private void updateUI(List<WorkSession> sessions, Map<String, Long> catDuration, LocalDate date) {
+        // 时间线
+        sessionData.setAll(sessions);
+        if (!sessions.isEmpty()) {
+            timelineList.getSelectionModel().selectFirst();
         }
 
-        // 2. 加载类别统计
-        if (timelineService != null) {
-            Map<String, Long> catDuration = timelineService.getCategoryDuration(selectedDate);
-            lblCatCode.setText(catDuration.getOrDefault("CODE", 0L) + " 分钟");
-            lblCatDocument.setText(catDuration.getOrDefault("DOCUMENT", 0L) + " 分钟");
-            lblCatImage.setText(catDuration.getOrDefault("IMAGE", 0L) + " 分钟");
-            lblCatVideo.setText(catDuration.getOrDefault("VIDEO", 0L) + " 分钟");
-            lblCatConfig.setText(catDuration.getOrDefault("CONFIG", 0L) + " 分钟");
-        }
+        // 概览数字
+        long totalMinutes = sessions.stream().mapToLong(WorkSession::getDurationMinutes).sum();
+        lblBlockCount.setText(String.valueOf(sessions.size()));
+        lblActiveMinutes.setText(String.valueOf(totalMinutes));
+
+        // 标题
+        String dateLabel = date.equals(LocalDate.now()) ? "今日" : date.toString();
+        lblTimelineTitle.setText(dateLabel + "工作会话");
+        lblEventCount.setText(dateLabel + ": " + sessions.size() + " 个会话 / " + totalMinutes + " 分钟");
+
+        // 类别统计
+        lblCatCode.setText(catDuration.getOrDefault("CODE", 0L) + " 分钟");
+        lblCatDocument.setText(catDuration.getOrDefault("DOCUMENT", 0L) + " 分钟");
+        lblCatImage.setText(catDuration.getOrDefault("IMAGE", 0L) + " 分钟");
+        lblCatVideo.setText(catDuration.getOrDefault("VIDEO", 0L) + " 分钟");
+        lblCatConfig.setText(catDuration.getOrDefault("CONFIG", 0L) + " 分钟");
+
+        lblStatusText.setText("已加载 " + sessions.size() + " 个会话 · " + date.format(DATE_FMT));
     }
 
     // ==================== 右侧详情：WorkSession → ActivityBlock 列表 ====================
@@ -393,7 +417,7 @@ public class MainController implements Initializable {
     }
 
     /**
-     * 弹出文件列表窗口。
+     * 弹出文件列表窗口，支持右键打开文件/打开所在目录。
      */
     private void showFileListPopup(String title, java.util.Set<String> filePaths) {
         javafx.stage.Stage popup = new javafx.stage.Stage();
@@ -410,6 +434,34 @@ public class MainController implements Initializable {
         fileList.setCellFactory(list -> new FileDetailCell());
         fileList.setFixedCellSize(48);
 
+        // 右键菜单
+        ContextMenu contextMenu = new ContextMenu();
+
+        MenuItem openFile = new MenuItem("打开文件");
+        openFile.setOnAction(e -> {
+            String selected = fileList.getSelectionModel().getSelectedItem();
+            if (selected != null) openFile(selected);
+        });
+
+        MenuItem openDir = new MenuItem("打开所在目录");
+        openDir.setOnAction(e -> {
+            String selected = fileList.getSelectionModel().getSelectedItem();
+            if (selected != null) openFileLocation(selected);
+        });
+
+        contextMenu.getItems().addAll(openFile, openDir);
+
+        // 右键显示菜单
+        fileList.setContextMenu(contextMenu);
+
+        // 双击打开文件
+        fileList.setOnMouseClicked(e -> {
+            if (e.getClickCount() == 2) {
+                String selected = fileList.getSelectionModel().getSelectedItem();
+                if (selected != null) openFile(selected);
+            }
+        });
+
         content.getChildren().addAll(header, fileList);
         VBox.setVgrow(fileList, Priority.ALWAYS);
 
@@ -417,6 +469,43 @@ public class MainController implements Initializable {
         scene.getStylesheets().add(getClass().getResource("/css/style.css").toExternalForm());
         popup.setScene(scene);
         popup.show();
+    }
+
+    /**
+     * 用系统默认程序打开文件。
+     */
+    private void openFile(String filePath) {
+        try {
+            java.io.File file = new java.io.File(filePath);
+            if (file.exists()) {
+                java.awt.Desktop.getDesktop().open(file);
+            } else {
+                lblStatusText.setText("文件不存在: " + filePath);
+            }
+        } catch (Exception e) {
+            lblStatusText.setText("打开文件失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 在资源管理器中打开文件所在目录并选中文件。
+     */
+    private void openFileLocation(String filePath) {
+        try {
+            java.io.File file = new java.io.File(filePath);
+            if (file.exists()) {
+                // explorer /select,"path" 打开目录并选中文件
+                Runtime.getRuntime().exec(new String[]{"explorer", "/select,", filePath});
+            } else {
+                // 文件不存在时打开其父目录
+                java.io.File parent = file.getParentFile();
+                if (parent != null && parent.exists()) {
+                    java.awt.Desktop.getDesktop().open(parent);
+                }
+            }
+        } catch (Exception e) {
+            lblStatusText.setText("打开目录失败: " + e.getMessage());
+        }
     }
 
     // ==================== 导航切换 ====================
