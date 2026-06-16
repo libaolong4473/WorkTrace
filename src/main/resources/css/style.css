@@ -345,7 +345,3 @@
     -fx-background-color: #4E5254;
     -fx-border-color: #555555;
 }
-
-.date-picker .popup-control .arrow-button {
-    -fx-background-color: transparent;
-}

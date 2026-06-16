@@ -7,8 +7,7 @@
 <BorderPane xmlns:fx="http://javafx.com/fxml"
             fx:id="rootPane"
             fx:controller="com.worktrace.ui.controller.MainController"
-            prefWidth="1280" prefHeight="800"
-            stylesheets="@../css/style.css">
+            prefWidth="1280" prefHeight="800">
 
     <!-- ==================== TOP: 状态栏 ==================== -->
     <top>
@@ -90,14 +89,14 @@
                 <padding><Insets top="12" right="12" bottom="12" left="12"/></padding>
 
                 <!-- 日期选择 + 快捷按钮（FlowPane 自动换行） -->
-                <FlowPane spacing="6" alignment="CENTER_LEFT">
+                <FlowPane hgap="6" vgap="6" alignment="CENTER_LEFT">
                     <Label fx:id="lblTimelineTitle" text="今日时间线" styleClass="timeline-header"/>
                     <Region prefWidth="12"/>
                     <Button fx:id="btnToday"     text="今天"    styleClass="date-quick-btn" />
                     <Button fx:id="btnYesterday"  text="昨天"    styleClass="date-quick-btn" />
                     <Button fx:id="btnLast7Days"  text="7天"     styleClass="date-quick-btn" />
                     <Button fx:id="btnLast30Days" text="30天"    styleClass="date-quick-btn" />
-                    <DatePicker fx:id="datePicker" styleClass="date-picker"/>
+                    <DatePicker fx:id="datePicker"/>
                 </FlowPane>
 
                 <ListView fx:id="timelineList" styleClass="timeline-list" VBox.vgrow="ALWAYS"/>

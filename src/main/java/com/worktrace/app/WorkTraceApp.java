@@ -139,6 +139,11 @@ public class WorkTraceApp extends Application {
 
         // 8. 显示窗口（UI 立即出现）
         Scene scene = new Scene(root, 1280, 800);
+        // 加载 CSS 样式
+        var css = getClass().getResource("/css/style.css");
+        if (css != null) {
+            scene.getStylesheets().add(css.toExternalForm());
+        }
         primaryStage.setTitle("WorkTrace - 个人工作轨迹");
         primaryStage.setScene(scene);
         primaryStage.setMaximized(true);

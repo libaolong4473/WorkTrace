@@ -190,6 +190,7 @@ public class MainController implements Initializable {
     private void initDatePicker() {
         // DatePicker 默认今天
         datePicker.setValue(LocalDate.now());
+        datePicker.getStyleClass().add("date-picker");
 
         // DatePicker 切换日期
         datePicker.valueProperty().addListener((obs, oldVal, newVal) -> {
